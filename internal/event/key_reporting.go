@@ -39,3 +39,34 @@ type KeyRingDataPoint struct {
 type KeyRingReportingResponse struct {
 	DataPoints []*KeyRingDataPoint `json:"dataPoints"`
 }
+
+type SpentKeyReportingRequest struct {
+	Tags    []string `json:"tags"`
+	Order   string   `json:"order"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+}
+
+type SpentKeyDataPoint struct {
+	KeyRing string
+	KeyId  string
+}
+
+type SpentKeyReportingResponse struct {
+	KeyRings []string `json:"keyRings"`
+}
+
+type UsageReportingRequest struct {
+	Tags    []string `json:"tags"`
+}
+
+type UsageData struct {
+	LastDayUsage  int `json:"lastDayUsage"`
+	LastWeekUsage int `json:"lastWeekUsage"`
+	LastMonthUsage int `json:"lastMonthUsage"`
+	TotalUsage int `json:"totalUsage"`
+}
+
+type UsageReportingResponse struct {
+	UsageData *UsageData `json:"usageData"`
+}

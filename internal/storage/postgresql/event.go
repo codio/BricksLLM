@@ -573,6 +573,14 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	return data, nil
 }
 
+func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int) ([]*event.SpentKeyDataPoint, error) {
+	return []*event.SpentKeyDataPoint{&event.SpentKeyDataPoint{}}, nil
+}
+
+func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
+	return nil, nil
+}
+
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {

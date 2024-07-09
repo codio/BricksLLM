@@ -406,3 +406,147 @@ func getGetTopKeyRingsMetricsHandler(m KeyReportingManager, prod bool) gin.Handl
 		c.JSON(http.StatusOK, reportingResponse)
 	}
 }
+
+func getGetSpentKeyMetricsHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_get_spent_keys_metrics_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_get_spent_keys_metrics_handler.latency", dur, nil, 1)
+		}()
+
+		path := "/api/reporting/spent-keys"
+
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading spent key reporting request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		request := &event.SpentKeyReportingRequest{}
+		err = json.Unmarshal(data, request)
+		if err != nil {
+			logError(log, "error when unmarshalling spent key reporting request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		reportingResponse, err := m.GetSpentKeyReporting(request)
+		if err != nil {
+			telemetry.Incr("bricksllm.admin.get_get_spent_keys_metrics_handler.get_spent_key_reporting", nil, 1)
+
+			logError(log, "error when getting spent key reporting", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/event-reporting-manager",
+				Title:    "spent key reporting error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_get_spent_keys_metrics_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, reportingResponse)
+	}
+}
+
+func getGetUsageMetricsHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_get_usage_metrics_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_get_usage_metrics_handler.latency", dur, nil, 1)
+		}()
+
+		path := "/api/reporting/usage"
+
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading usage reporting request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		request := &event.UsageReportingRequest{}
+		err = json.Unmarshal(data, request)
+		if err != nil {
+			logError(log, "error when unmarshalling usage reporting request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		reportingResponse, err := m.GetUsageReporting(request)
+		if err != nil {
+			telemetry.Incr("bricksllm.admin.get_get_usage_metrics_handler.get_usage_reporting", nil, 1)
+
+			logError(log, "error when getting top key ring reporting", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/event-reporting-manager",
+				Title:    "usage reporting error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_get_usage_metrics_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, reportingResponse)
+	}
+}

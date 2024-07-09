@@ -16,6 +16,10 @@ type keyStorage interface {
 	GetKey(keyId string) (*key.ResponseKey, error)
 }
 
+type acCache interface {
+	GetAccessStatus(key string) bool
+}
+
 type eventStorage interface {
 	GetEvents(userId, customId string, keyIds []string, start, end int64) ([]*event.Event, error)
 	GetEventsV2(req *event.EventRequest) (*event.EventResponse, error)
@@ -25,20 +29,25 @@ type eventStorage interface {
 	GetUserIds(keyId string) ([]string, error)
 	GetCustomIds(keyId string) ([]string, error)
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
+
 	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
+	GetSpentKeyRings(tags []string, order string, limit, offset int) ([]*event.SpentKeyDataPoint, error)
+	GetUsageData(tags []string) (*event.UsageData, error)
 }
 
 type ReportingManager struct {
 	es eventStorage
 	cs costStorage
 	ks keyStorage
+	ac  acCache
 }
 
-func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage) *ReportingManager {
+func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, ac acCache) *ReportingManager {
 	return &ReportingManager{
 		cs: cs,
 		ks: ks,
 		es: es,
+		ac: ac,
 	}
 }
 
@@ -128,6 +137,51 @@ func (rm *ReportingManager) GetTopKeyRingReporting(r *event.KeyRingReportingRequ
 
 	return &event.KeyRingReportingResponse{
 		DataPoints: dataPoints,
+	}, nil
+}
+
+func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingRequest) (*event.SpentKeyReportingResponse, error) {
+	if r == nil {
+		return nil, internal_errors.NewValidationError("key reporting requst cannot be nil")
+	}
+	for _, tag := range r.Tags {
+		if len(tag) == 0 {
+			return nil, internal_errors.NewValidationError("key reporting requst tag cannot be empty")
+		}
+	}
+	if len(r.Order) != 0 && strings.ToUpper(r.Order) != "DESC" && strings.ToUpper(r.Order) != "ASC" {
+		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
+	}
+	spentKeys, err := rm.es.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset)
+	if err != nil {
+		return nil, err
+	}
+	keyRings := []string{}
+	for i := 0; i < len(spentKeys); i++ {
+		if rm.ac.GetAccessStatus(spentKeys[i].KeyId) {
+			keyRings = append(keyRings, spentKeys[i].KeyRing)
+		}
+	}
+	return &event.SpentKeyReportingResponse{
+		KeyRings: keyRings,
+	}, nil
+}
+
+func (rm *ReportingManager) GetUsageReporting(r *event.UsageReportingRequest) (*event.UsageReportingResponse, error) {
+	if r == nil {
+		return nil, internal_errors.NewValidationError("key reporting requst cannot be nil")
+	}
+	for _, tag := range r.Tags {
+		if len(tag) == 0 {
+			return nil, internal_errors.NewValidationError("key reporting requst tag cannot be empty")
+		}
+	}
+	usage, err := rm.es.GetUsageData(r.Tags)
+	if err != nil {
+		return nil, err
+	}
+	return &event.UsageReportingResponse{
+		UsageData: usage,
 	}, nil
 }
 

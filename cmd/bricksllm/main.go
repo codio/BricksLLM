@@ -299,7 +299,7 @@ func main() {
 	userAccessCache := redisStorage.NewAccessCache(userAccessRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
 	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache)
-	krm := manager.NewReportingManager(costStorage, store, store)
+	krm := manager.NewReportingManager(costStorage, store, store, accessCache)
 	psm := manager.NewProviderSettingsManager(store, psMemStore)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
 	rm := manager.NewRouteManager(store, store, rMemStore, psMemStore)
