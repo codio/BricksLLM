@@ -469,6 +469,122 @@ func (s *Store) GetTopKeyDataPoints(start, end int64, tags, keyIds []string, ord
 	return data, nil
 }
 
+func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error) {
+	args := []any{}
+	condition := ""
+	condition2 := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf("AND tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	if revoked != nil {
+		bools := "False"
+		if *revoked {
+			bools = "True"
+		}
+
+		condition += fmt.Sprintf(" AND revoked = %s", bools)
+	}
+
+	if len(tags) > 0 {
+		condition2 += fmt.Sprintf("AND keys.tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	if revoked != nil {
+		bools := "False"
+		if *revoked {
+			bools = "True"
+		}
+
+		condition2 += fmt.Sprintf(" AND keys.revoked = %s", bools)
+	}
+
+	query := fmt.Sprintf(`
+	WITH keys_table AS
+	(
+			SELECT key_id, key_ring FROM keys WHERE created_at >= %d AND created_at < %d %s
+	),top_keys_table AS 
+	(
+		SELECT 
+		events.key_id,
+		SUM(cost_in_usd) AS "CostInUsd"
+		FROM events
+		LEFT JOIN keys
+		ON keys.key_id = events.key_id
+		WHERE (events.key_id = '') IS FALSE AND events.created_at >= %d AND events.created_at < %d %s
+		GROUP BY events.key_id
+	)
+	SELECT CASE
+			WHEN top_keys_table.key_id IS NOT NULL THEN top_keys_table.key_id
+			ELSE keys_table.key_id
+		END 
+		AS key_id
+  , COALESCE(top_keys_table."CostInUsd", 0) AS cost_in_usd
+		FROM keys_table
+		FULL JOIN top_keys_table
+		ON top_keys_table.key_id = keys_table.key_id 
+
+`, start, end, condition, start, end, condition2)
+
+	qorder := "DESC"
+	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
+		qorder = "ASC"
+	}
+
+	query += fmt.Sprintf(`
+	ORDER BY cost_in_usd %s 
+`, qorder)
+
+	if limit != 0 {
+		query += fmt.Sprintf(`
+		LIMIT %d OFFSET %d;
+	`, limit, offset)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := []*event.KeyRingDataPoint{}
+	for rows.Next() {
+		var e event.KeyRingDataPoint
+		var keyId sql.NullString
+		var keyRing sql.NullString
+
+		additional := []any{
+			&keyId,
+			&keyRing,
+			&e.CostInUsd,
+		}
+
+		if err := rows.Scan(
+			additional...,
+		); err != nil {
+			return nil, err
+		}
+
+		pe := &e
+		pe.KeyRing = keyRing.String
+
+		data = append(data, pe)
+	}
+
+	return data, nil
+}
+
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {

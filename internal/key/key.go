@@ -172,6 +172,7 @@ type RequestKey struct {
 	RotationEnabled        bool         `json:"rotationEnabled"`
 	PolicyId               string       `json:"policyId"`
 	IsKeyNotHashed         bool         `json:"isKeyNotHashed"`
+	KeyRing                string       `json:"keyRing"`
 }
 
 func (rk *RequestKey) Validate() error {
@@ -210,6 +211,10 @@ func (rk *RequestKey) Validate() error {
 
 	if len(rk.KeyId) == 0 {
 		invalid = append(invalid, "keyId")
+	}
+
+	if len(rk.KeyRing) == 0 {
+		invalid = append(invalid, "keyRing")
 	}
 
 	if len(rk.SettingIds) != 0 {

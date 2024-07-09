@@ -25,6 +25,7 @@ type eventStorage interface {
 	GetUserIds(keyId string) ([]string, error)
 	GetCustomIds(keyId string) ([]string, error)
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
+	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
 }
 
 type ReportingManager struct {
@@ -101,6 +102,31 @@ func (rm *ReportingManager) GetTopKeyReporting(r *event.KeyReportingRequest) (*e
 	}
 
 	return &event.KeyReportingResponse{
+		DataPoints: dataPoints,
+	}, nil
+}
+
+func (rm *ReportingManager) GetTopKeyRingReporting(r *event.KeyRingReportingRequest) (*event.KeyRingReportingResponse, error) {
+	if r == nil {
+		return nil, internal_errors.NewValidationError("key reporting requst cannot be nil")
+	}
+
+	for _, tag := range r.Tags {
+		if len(tag) == 0 {
+			return nil, internal_errors.NewValidationError("key reporting requst tag cannot be empty")
+		}
+	}
+
+	if len(r.Order) != 0 && strings.ToUpper(r.Order) != "DESC" && strings.ToUpper(r.Order) != "ASC" {
+		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
+	}
+
+	dataPoints, err := rm.es.GetTopKeyRingDataPoints(r.Start, r.End, r.Tags, r.Order, r.Limit, r.Offset, r.Revoked)
+	if err != nil {
+		return nil, err
+	}
+
+	return &event.KeyRingReportingResponse{
 		DataPoints: dataPoints,
 	}, nil
 }

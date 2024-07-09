@@ -20,3 +20,22 @@ type KeyReportingRequest struct {
 	Name    string   `json:"name"`
 	Revoked *bool    `json:"revoked"`
 }
+
+type KeyRingReportingRequest struct {
+	Tags    []string `json:"tags"`
+	Order   string   `json:"order"`
+	Start   int64    `json:"start"`
+	End     int64    `json:"end"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+	Revoked *bool    `json:"revoked"`
+}
+
+type KeyRingDataPoint struct {
+	KeyRing   string  `json:"keyRing"`
+	CostInUsd float64 `json:"costInUsd"`
+}
+
+type KeyRingReportingResponse struct {
+	DataPoints []*KeyRingDataPoint `json:"dataPoints"`
+}
