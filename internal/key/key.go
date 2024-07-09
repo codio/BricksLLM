@@ -164,6 +164,7 @@ type RequestKey struct {
 	RateLimitOverTime      int          `json:"rateLimitOverTime"`
 	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
 	Ttl                    string       `json:"ttl"`
+	KeyRing                string       `json:"keyRing"`
 	SettingId              string       `json:"settingId"`
 	AllowedPaths           []PathConfig `json:"allowedPaths"`
 	SettingIds             []string     `json:"settingIds"`
@@ -172,7 +173,6 @@ type RequestKey struct {
 	RotationEnabled        bool         `json:"rotationEnabled"`
 	PolicyId               string       `json:"policyId"`
 	IsKeyNotHashed         bool         `json:"isKeyNotHashed"`
-	KeyRing                string       `json:"keyRing"`
 }
 
 func (rk *RequestKey) Validate() error {
@@ -318,6 +318,7 @@ type ResponseKey struct {
 	RateLimitOverTime      int          `json:"rateLimitOverTime"`
 	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
 	Ttl                    string       `json:"ttl"`
+	KeyRing                string       `json:"keyRing"`
 	SettingId              string       `json:"settingId"`
 	AllowedPaths           []PathConfig `json:"allowedPaths"`
 	SettingIds             []string     `json:"settingIds"`

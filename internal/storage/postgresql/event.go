@@ -514,25 +514,15 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	),top_keys_table AS 
 	(
 		SELECT 
-		events.key_id,
-		SUM(cost_in_usd) AS "CostInUsd"
+		key_ring,
+		SUM(cost_in_usd) AS total_cost_in_usd
 		FROM events
 		LEFT JOIN keys
 		ON keys.key_id = events.key_id
 		WHERE (events.key_id = '') IS FALSE AND events.created_at >= %d AND events.created_at < %d %s
-		GROUP BY events.key_id
+		GROUP BY key_ring
 	)
-	SELECT CASE
-			WHEN top_keys_table.key_id IS NOT NULL THEN top_keys_table.key_id
-			ELSE keys_table.key_id
-		END 
-		AS key_id
-  , COALESCE(top_keys_table."CostInUsd", 0) AS cost_in_usd
-		FROM keys_table
-		FULL JOIN top_keys_table
-		ON top_keys_table.key_id = keys_table.key_id 
-
-`, start, end, condition, start, end, condition2)
+	SELECT * FROM top_keys_table `, start, end, condition, start, end, condition2)
 
 	qorder := "DESC"
 	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
@@ -540,7 +530,7 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	}
 
 	query += fmt.Sprintf(`
-	ORDER BY cost_in_usd %s 
+	ORDER BY total_cost_in_usd %s 
 `, qorder)
 
 	if limit != 0 {
@@ -561,11 +551,9 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	data := []*event.KeyRingDataPoint{}
 	for rows.Next() {
 		var e event.KeyRingDataPoint
-		var keyId sql.NullString
 		var keyRing sql.NullString
 
 		additional := []any{
-			&keyId,
 			&keyRing,
 			&e.CostInUsd,
 		}
