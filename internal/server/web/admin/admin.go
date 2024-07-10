@@ -40,7 +40,7 @@ type KeyReportingManager interface {
 	GetTopKeyRingReporting(r *event.KeyRingReportingRequest) (*event.KeyRingReportingResponse, error)
 	GetSpentKeyReporting(r *event.SpentKeyReportingRequest) (*event.SpentKeyReportingResponse, error)
 	GetUsageReporting(r *event.UsageReportingRequest) (*event.UsageReportingResponse, error)
-	
+
 	GetKeyReporting(keyId string) (*key.KeyReporting, error)
 	GetEvents(userId, customId string, keyIds []string, start int64, end int64) ([]*event.Event, error)
 	GetEventsV2(r *event.EventRequest) (*event.EventResponse, error)

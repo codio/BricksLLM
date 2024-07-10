@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/lib/pq"
@@ -578,7 +579,48 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int)
 }
 
 func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
-	return nil, nil
+	nowTime := time.Now()
+	dayAgo := nowTime.Add(-24 * time.Hour).Unix()
+	weekAgo := nowTime.Add(-7 * 24 * time.Hour).Unix()
+	monthAgo := nowTime.Add(-30 * 24 * time.Hour).Unix()
+
+	args := []any{}
+	condition := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf(" tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+	SELECT 
+		COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_day,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_week,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month
+	FROM events
+	WHERE %s
+	`, dayAgo, weekAgo, monthAgo, condition)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	data := &event.UsageData{}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
+		&data.TotalUsage,
+		&data.LastDayUsage,
+		&data.LastWeekUsage,
+		&data.LastMonthUsage,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return data, nil
 }
 
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error) {

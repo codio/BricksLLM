@@ -41,15 +41,15 @@ type KeyRingReportingResponse struct {
 }
 
 type SpentKeyReportingRequest struct {
-	Tags    []string `json:"tags"`
-	Order   string   `json:"order"`
-	Limit   int      `json:"limit"`
-	Offset  int      `json:"offset"`
+	Tags   []string `json:"tags"`
+	Order  string   `json:"order"`
+	Limit  int      `json:"limit"`
+	Offset int      `json:"offset"`
 }
 
 type SpentKeyDataPoint struct {
 	KeyRing string
-	KeyId  string
+	KeyId   string
 }
 
 type SpentKeyReportingResponse struct {
@@ -57,14 +57,14 @@ type SpentKeyReportingResponse struct {
 }
 
 type UsageReportingRequest struct {
-	Tags    []string `json:"tags"`
+	Tags []string `json:"tags"`
 }
 
 type UsageData struct {
-	LastDayUsage  int `json:"lastDayUsage"`
-	LastWeekUsage int `json:"lastWeekUsage"`
-	LastMonthUsage int `json:"lastMonthUsage"`
-	TotalUsage int `json:"totalUsage"`
+	LastDayUsage   float64 `json:"lastDayUsage"`
+	LastWeekUsage  float64 `json:"lastWeekUsage"`
+	LastMonthUsage float64 `json:"lastMonthUsage"`
+	TotalUsage     float64 `json:"totalUsage"`
 }
 
 type UsageReportingResponse struct {

@@ -39,7 +39,7 @@ type ReportingManager struct {
 	es eventStorage
 	cs costStorage
 	ks keyStorage
-	ac  acCache
+	ac acCache
 }
 
 func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, ac acCache) *ReportingManager {
