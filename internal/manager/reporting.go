@@ -31,7 +31,7 @@ type eventStorage interface {
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
 
 	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
-	GetSpentKeyRings(tags []string, order string, limit, offset int) ([]*event.SpentKeyDataPoint, error)
+	GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(string) bool) ([]string, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
 }
 
@@ -152,18 +152,12 @@ func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingReque
 	if len(r.Order) != 0 && strings.ToUpper(r.Order) != "DESC" && strings.ToUpper(r.Order) != "ASC" {
 		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
 	}
-	spentKeys, err := rm.es.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset)
+	spentKeys, err := rm.es.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset, rm.ac.GetAccessStatus)
 	if err != nil {
 		return nil, err
 	}
-	keyRings := []string{}
-	for i := 0; i < len(spentKeys); i++ {
-		if rm.ac.GetAccessStatus(spentKeys[i].KeyId) {
-			keyRings = append(keyRings, spentKeys[i].KeyRing)
-		}
-	}
 	return &event.SpentKeyReportingResponse{
-		KeyRings: keyRings,
+		KeyRings: spentKeys,
 	}, nil
 }
 

@@ -574,8 +574,68 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	return data, nil
 }
 
-func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int) ([]*event.SpentKeyDataPoint, error) {
-	return []*event.SpentKeyDataPoint{&event.SpentKeyDataPoint{}}, nil
+func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(string) bool) ([]string, error) {
+	args := []any{}
+	condition := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf(" AND tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+	SELECT 
+		key_id,
+		key_ring
+	FROM keys
+	WHERE keys.revoked = False %s
+	`, condition)
+
+	qorder := "DESC"
+	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
+		qorder = "ASC"
+	}
+
+	query += fmt.Sprintf(`
+	ORDER BY created_at %s 
+`, qorder)
+
+	if limit != 0 {
+		query += fmt.Sprintf(`
+		LIMIT %d OFFSET %d;
+	`, limit, offset)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := []string{}
+	for rows.Next() {
+		var keyId sql.NullString
+		var keyRing sql.NullString
+
+		if err := rows.Scan(
+			&keyId,
+			&keyRing,
+		); err != nil {
+			return nil, err
+		}
+
+		if validator(keyId.String) {
+			data = append(data, keyRing.String)
+		}
+	}
+
+	return data, nil
 }
 
 func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
