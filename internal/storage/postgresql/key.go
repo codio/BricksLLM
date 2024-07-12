@@ -735,6 +735,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
 		&k.Ttl,
+		&k.KeyRing,
 		&settingId,
 		&data,
 		pq.Array(&k.SettingIds),
