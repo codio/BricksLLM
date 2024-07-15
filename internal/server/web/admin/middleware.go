@@ -1,6 +1,12 @@
 package admin
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
+	"fmt"
+	"io"
 	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -37,4 +43,41 @@ func getAdminLoggerMiddleware(log *zap.Logger, prefix string, prod bool, adminPa
 			)
 		}
 	}
+}
+
+func getAdinSignRequestMiddleware(prod bool, xCodioSignSecret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !prod {
+			c.Next()
+			return
+		}
+		sign := c.Request.Header.Get("X-Codio-Sign")
+		timestamp := c.Request.Header.Get("X-Codio-Sign-Timestamp")
+		if len(sign) == 0 || len(timestamp) == 0 || len(xCodioSignSecret) == 0 {
+			c.Status(403)
+			c.Abort()
+			return
+		}
+
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			fmt.Println(err)
+		}
+		data := fmt.Sprintf("%s%s", timestamp, body)
+		c.Request.Body = io.NopCloser(bytes.NewReader(body))
+		if !validSign([]byte(data), []byte(xCodioSignSecret), sign) {
+			c.Status(403)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func validSign(message, key []byte, messageSign string) bool {
+	mac := hmac.New(sha1.New, key)
+	mac.Write(message)
+	expectedMAC := mac.Sum(nil)
+	expectedSign := base64.StdEncoding.EncodeToString(expectedMAC)
+	return messageSign == expectedSign
 }
