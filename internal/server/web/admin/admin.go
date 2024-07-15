@@ -75,7 +75,7 @@ func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReporting
 
 	prod := mode == "production"
 	router.Use(getAdminLoggerMiddleware(log, "admin", prod, adminPass))
-	router.Use(getAdinSignRequestMiddleware(prod, xCodioSignSecret))
+	router.Use(getAdminSignRequestMiddleware(prod, xCodioSignSecret))
 
 	router.GET("/api/health", getGetHealthCheckHandler())
 

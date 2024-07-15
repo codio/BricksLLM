@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -45,8 +46,10 @@ func getAdminLoggerMiddleware(log *zap.Logger, prefix string, prod bool, adminPa
 	}
 }
 
-func getAdinSignRequestMiddleware(prod bool, xCodioSignSecret string) gin.HandlerFunc {
+func getAdminSignRequestMiddleware(prod bool, xCodioSignSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+
 		if !prod {
 			c.Next()
 			return
@@ -61,7 +64,15 @@ func getAdinSignRequestMiddleware(prod bool, xCodioSignSecret string) gin.Handle
 
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			fmt.Println(err)
+			logError(log, "error when reading get events request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "get events request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: c.FullPath(),
+			})
+			return
 		}
 		data := fmt.Sprintf("%s%s", timestamp, body)
 		c.Request.Body = io.NopCloser(bytes.NewReader(body))
