@@ -14,10 +14,11 @@ type costStorage interface {
 
 type keyStorage interface {
 	GetKey(keyId string) (*key.ResponseKey, error)
+	GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error)
 }
 
-type acCache interface {
-	GetAccessStatus(key string) bool
+type keyValidator interface {
+	Validate(k *key.ResponseKey, promptCost float64) error
 }
 
 type eventStorage interface {
@@ -31,7 +32,6 @@ type eventStorage interface {
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
 
 	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
-	GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(string) bool) ([]string, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
 }
 
@@ -39,15 +39,15 @@ type ReportingManager struct {
 	es eventStorage
 	cs costStorage
 	ks keyStorage
-	ac acCache
+	kv keyValidator
 }
 
-func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, ac acCache) *ReportingManager {
+func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, kv keyValidator) *ReportingManager {
 	return &ReportingManager{
 		cs: cs,
 		ks: ks,
 		es: es,
-		ac: ac,
+		kv: kv,
 	}
 }
 
@@ -152,7 +152,15 @@ func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingReque
 	if len(r.Order) != 0 && strings.ToUpper(r.Order) != "DESC" && strings.ToUpper(r.Order) != "ASC" {
 		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
 	}
-	spentKeys, err := rm.es.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset, rm.ac.GetAccessStatus)
+
+	validator := func(k *key.ResponseKey) bool {
+		if e := rm.kv.Validate(k, 0); e != nil {
+			return false
+		}
+		return true
+	}
+
+	spentKeys, err := rm.ks.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset, validator)
 	if err != nil {
 		return nil, err
 	}

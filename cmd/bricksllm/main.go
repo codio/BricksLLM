@@ -298,8 +298,10 @@ func main() {
 	userCostStorage := redisStorage.NewStore(userCostRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	userAccessCache := redisStorage.NewAccessCache(userAccessRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
+	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage)
+
 	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache)
-	krm := manager.NewReportingManager(costStorage, store, store, accessCache)
+	krm := manager.NewReportingManager(costStorage, store, store, v)
 	psm := manager.NewProviderSettingsManager(store, psMemStore)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
 	rm := manager.NewRouteManager(store, store, rMemStore, psMemStore)
@@ -333,7 +335,6 @@ func main() {
 	vllme := vllm.NewCostEstimator(vllmtc)
 	die := deepinfra.NewCostEstimator()
 
-	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage)
 	uv := validator.NewUserValidator(userCostLimitCache, userRateLimitCache, userCostStorage)
 
 	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store)

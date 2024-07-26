@@ -467,6 +467,102 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 	return keys[0], nil
 }
 
+func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error) {
+	args := []any{}
+	condition := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf(" AND tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+	SELECT 
+		key_id,
+		key_ring
+	FROM keys
+	WHERE keys.revoked = False %s
+	`, condition)
+
+	qorder := "DESC"
+	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
+		qorder = "ASC"
+	}
+
+	query += fmt.Sprintf(`
+	ORDER BY created_at %s 
+`, qorder)
+
+	if limit != 0 {
+		query += fmt.Sprintf(`
+		LIMIT %d OFFSET %d;
+	`, limit, offset)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	invalidKeyRings := []string{}
+	for rows.Next() {
+		var k key.ResponseKey
+		var settingId sql.NullString
+		var data []byte
+		if err := rows.Scan(
+			&k.Name,
+			&k.CreatedAt,
+			&k.UpdatedAt,
+			pq.Array(&k.Tags),
+			&k.Revoked,
+			&k.KeyId,
+			&k.Key,
+			&k.RevokedReason,
+			&k.CostLimitInUsd,
+			&k.CostLimitInUsdOverTime,
+			&k.CostLimitInUsdUnit,
+			&k.RateLimitOverTime,
+			&k.RateLimitUnit,
+			&k.Ttl,
+			&k.KeyRing,
+			&settingId,
+			&data,
+			pq.Array(&k.SettingIds),
+			&k.ShouldLogRequest,
+			&k.ShouldLogResponse,
+			&k.RotationEnabled,
+			&k.PolicyId,
+			&k.IsKeyNotHashed,
+		); err != nil {
+			return nil, err
+		}
+		pk := &k
+		pk.SettingId = settingId.String
+
+		if len(data) != 0 {
+			pathConfigs := []key.PathConfig{}
+			if err := json.Unmarshal(data, &pathConfigs); err != nil {
+				return nil, err
+			}
+
+			pk.AllowedPaths = pathConfigs
+		}
+
+		if validator(pk) {
+			invalidKeyRings = append(invalidKeyRings, pk.KeyRing)
+		}
+	}
+
+	return invalidKeyRings, nil
+}
+
 func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
