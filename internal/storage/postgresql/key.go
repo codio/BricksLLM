@@ -480,10 +480,7 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 	}
 
 	query := fmt.Sprintf(`
-	SELECT 
-		key_id,
-		key_ring
-	FROM keys
+	SELECT * FROM keys
 	WHERE keys.revoked = False %s
 	`, condition)
 
@@ -555,7 +552,7 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 			pk.AllowedPaths = pathConfigs
 		}
 
-		if validator(pk) {
+		if !validator(pk) {
 			invalidKeyRings = append(invalidKeyRings, pk.KeyRing)
 		}
 	}
