@@ -481,7 +481,7 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 
 	query := fmt.Sprintf(`
 	SELECT * FROM keys
-	WHERE keys.revoked = False %s
+	WHERE keys.revoked = False OR keys.revoked_reason = 'expired' %s
 	`, condition)
 
 	qorder := "DESC"
