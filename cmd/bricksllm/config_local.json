@@ -27,5 +27,6 @@
     "amazon_region": "us-west-2",
     "amazon_request_timeout": "5s",
     "amazon_connection_timeout": "10s",
+    "remove_user_agent": false,
     "x_codio_sign_secret": ""
 }
