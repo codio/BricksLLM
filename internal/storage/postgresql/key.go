@@ -384,6 +384,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
 		&k.Ttl,
+		&k.KeyRing,
 		&settingId,
 		&data,
 		pq.Array(&k.SettingIds),

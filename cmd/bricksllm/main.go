@@ -228,7 +228,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := apiRedisCache.Ping(ctx).Err(); err != nil {
+	if err := accessRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to api redis cache: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := rateLimitRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userRateLimitRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user rate limit redis cache: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costLimitRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userCostLimitRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user cost limit redis cache: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := apiRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userCostRedisStorage.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user cost redis cache: %v", err)
 	}
 
@@ -276,7 +276,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := userAccessRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user access redis storage: %v", err)
 	}
 
@@ -288,7 +288,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := providerSettingsRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to provider settings redis storage: %v", err)
 	}
 
@@ -300,7 +300,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := keysRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to keys redis storage: %v", err)
 	}
 
