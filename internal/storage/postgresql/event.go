@@ -3,6 +3,7 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -944,7 +945,17 @@ func (s *Store) GetEventsV2(req *event.EventRequest) (*event.EventResponse, erro
 	return resp, nil
 }
 
+func isJSON(str string) bool {
+    var js json.RawMessage
+    return json.Unmarshal([]byte(str), &js) == nil
+}
+
 func (s *Store) InsertEvent(e *event.Event) error {
+	rawResponse := string(e.Response)
+	if !isJSON(rawResponse) {
+		e.Response = []byte(`{"bricksError": "response is not a valid json"}`)
+	}
+
 	query := `
 		INSERT INTO events (event_id, created_at, tags, key_id, cost_in_usd, provider, model, status_code, prompt_token_count, completion_token_count, latency_in_ms, path, method, custom_id, request, response, user_id, action, policy_id, route_id, correlation_id, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
