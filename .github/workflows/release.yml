@@ -30,7 +30,7 @@ jobs:
 
       - name: Build dev docker image
         run: docker build -t temp_image --file ./Dockerfile.dev .
-        if: github.ref != 'refs/heads/master'
+        if: github.ref != 'refs/heads/main'
 
       - name: Push docker image to Amazon ECR
         env:
