@@ -946,8 +946,8 @@ func (s *Store) GetEventsV2(req *event.EventRequest) (*event.EventResponse, erro
 }
 
 func isJSON(str string) bool {
-    var js json.RawMessage
-    return json.Unmarshal([]byte(str), &js) == nil
+	var js json.RawMessage
+	return json.Unmarshal([]byte(str), &js) == nil
 }
 
 func (s *Store) InsertEvent(e *event.Event) error {
