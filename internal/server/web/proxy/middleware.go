@@ -747,6 +747,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				logError(logWithCid, "error when unmarshalling create image request", prod, err)
 				return
 			}
+			enrichedEvent.Request = ir
 
 			c.Set("model", ir.Model)
 
@@ -759,6 +760,14 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		if c.FullPath() == "/api/providers/openai/v1/images/edits" && c.Request.Method == http.MethodPost {
+			ier := &goopenai.ImageEditRequest{}
+			err := json.Unmarshal(body, ier)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling edit image request", prod, err)
+				return
+			}
+			enrichedEvent.Request = ier
+
 			prompt := c.PostForm("model")
 			model := c.PostForm("model")
 			size := c.PostForm("size")
@@ -779,6 +788,14 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		if c.FullPath() == "/api/providers/openai/v1/images/variations" && c.Request.Method == http.MethodPost {
+			ir := &goopenai.ImageVariRequest{}
+			err := json.Unmarshal(body, ir)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling image variations request", prod, err)
+				return
+			}
+			enrichedEvent.Request = ir
+
 			model := c.PostForm("model")
 			size := c.PostForm("size")
 			user := c.PostForm("user")

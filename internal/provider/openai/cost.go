@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -126,6 +127,18 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"finetune-gpt-3.5-turbo-0613": 0.006,
 		"finetune-babbage-002":        0.0016,
 		"finetune-davinci-002":        0.012,
+	},
+	"images": {
+		"dall-e-2":      0.02,
+		"dall-e-2-256":  0.016,
+		"dall-e-2-512":  0.018,
+		"dall-e-2-1024": 0.02,
+
+		"dall-e-3":               0.04,
+		"dall-e-3-1024-standart": 0.04,
+		"dall-e-3-1792-standart": 0.08,
+		"dall-e-3-1024-hd":       0.08,
+		"dall-e-3-1792-hd":       0.12,
 	},
 }
 
@@ -290,6 +303,98 @@ func (ce *CostEstimator) EstimateCompletionsStreamCostWithTokenCounts(model stri
 	}
 
 	return tks, cost, nil
+}
+
+func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string) (float64, error) {
+	simpleRes, err := convertResToSimple(resolution)
+	if err != nil {
+		return 0, err
+	}
+	var normalizedModel string
+	switch model {
+	case "dall-e-2":
+		normalizedModel, err = prepareDallE2Model(simpleRes, model)
+		if err != nil {
+			return 0, err
+		}
+	case "dall-e-3":
+		normalizedModel, err = prepareDallE3Model(quality, simpleRes, model)
+		if err != nil {
+			return 0, err
+		}
+	default:
+		return 0, errors.New("model is not present in the images cost map")
+	}
+
+	costMap, ok := ce.tokenCostMap["images"]
+	if !ok {
+		return 0, errors.New("images cost map is not provided")
+	}
+	cost, ok := costMap[normalizedModel]
+	if !ok {
+		return 0, errors.New("model is not present in the images cost map")
+	}
+	return cost, nil
+}
+
+var allowedDallE2Resolutions = []string{"256", "512", "1024"}
+var allowedDallE3Resolutions = []string{"1024", "1792"}
+var allowedDallE3Qualities = []string{"standart", "hd"}
+
+func convertResToSimple(resolution string) (string, error) {
+	if resolution == "" {
+		return "", nil
+	}
+	if strings.Contains(resolution, "1792") {
+		return "1792", nil
+	}
+	if strings.Contains(resolution, "1024") {
+		return "1024", nil
+	}
+	if strings.Contains(resolution, "512") {
+		return "512", nil
+	}
+	if strings.Contains(resolution, "256") {
+		return "256", nil
+	}
+	return "", errors.New("resolution is not valid")
+}
+
+func prepareDallE2Model(resolution, model string) (string, error) {
+	if resolution == "" {
+		return model, nil
+	}
+	if slices.Contains(allowedDallE2Resolutions, resolution) {
+		return fmt.Sprintf("%s-%s", model, resolution), nil
+	}
+	return "", errors.New("resolution is not valid")
+}
+
+func prepareDallE3Model(quality, resolution, model string) (string, error) {
+	preparedQuality, err := prepareDallE3Quality(quality)
+	if err != nil {
+		return "", err
+	}
+	if resolution == "" && quality == "" {
+		return model, nil
+	}
+	if resolution == "" {
+		return fmt.Sprintf("%s-%s-%s", model, "1024", preparedQuality), nil
+	}
+	if slices.Contains(allowedDallE3Resolutions, resolution) {
+		return fmt.Sprintf("%s-%s-%s", model, resolution, preparedQuality), nil
+	}
+	return "", errors.New("resolution is not valid")
+}
+
+func prepareDallE3Quality(quality string) (string, error) {
+	if quality != "" && !slices.Contains(allowedDallE3Qualities, quality) {
+		return "", errors.New("quality is not valid")
+	}
+	if quality == "" {
+		return "standart", nil
+	}
+	return quality, nil
 }
 
 func (ce *CostEstimator) EstimateTranscriptionCost(secs float64, model string) (float64, error) {

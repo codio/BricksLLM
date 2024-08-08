@@ -3,9 +3,11 @@ package postgresql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/lib/pq"
@@ -469,6 +471,155 @@ func (s *Store) GetTopKeyDataPoints(start, end int64, tags, keyIds []string, ord
 	return data, nil
 }
 
+func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error) {
+	args := []any{}
+	condition := ""
+	condition2 := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf("AND tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	if revoked != nil {
+		bools := "False"
+		if *revoked {
+			bools = "True"
+		}
+
+		condition += fmt.Sprintf(" AND revoked = %s", bools)
+	}
+
+	if len(tags) > 0 {
+		condition2 += fmt.Sprintf("AND keys.tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	if revoked != nil {
+		bools := "False"
+		if *revoked {
+			bools = "True"
+		}
+
+		condition2 += fmt.Sprintf(" AND keys.revoked = %s", bools)
+	}
+
+	query := fmt.Sprintf(`
+	WITH keys_table AS
+	(
+			SELECT key_id, key_ring FROM keys WHERE created_at >= %d AND created_at < %d %s
+	),top_keys_table AS 
+	(
+		SELECT 
+		key_ring,
+		SUM(cost_in_usd) AS total_cost_in_usd
+		FROM events
+		LEFT JOIN keys
+		ON keys.key_id = events.key_id
+		WHERE (events.key_id = '') IS FALSE AND events.created_at >= %d AND events.created_at < %d %s
+		GROUP BY key_ring
+	)
+	SELECT * FROM top_keys_table `, start, end, condition, start, end, condition2)
+
+	qorder := "DESC"
+	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
+		qorder = "ASC"
+	}
+
+	query += fmt.Sprintf(`
+	ORDER BY total_cost_in_usd %s 
+`, qorder)
+
+	if limit != 0 {
+		query += fmt.Sprintf(`
+		LIMIT %d OFFSET %d;
+	`, limit, offset)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	data := []*event.KeyRingDataPoint{}
+	for rows.Next() {
+		var e event.KeyRingDataPoint
+		var keyRing sql.NullString
+
+		additional := []any{
+			&keyRing,
+			&e.CostInUsd,
+		}
+
+		if err := rows.Scan(
+			additional...,
+		); err != nil {
+			return nil, err
+		}
+
+		pe := &e
+		pe.KeyRing = keyRing.String
+
+		data = append(data, pe)
+	}
+
+	return data, nil
+}
+
+func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
+	nowTime := time.Now()
+	dayAgo := nowTime.Add(-24 * time.Hour).Unix()
+	weekAgo := nowTime.Add(-7 * 24 * time.Hour).Unix()
+	monthAgo := nowTime.Add(-30 * 24 * time.Hour).Unix()
+
+	args := []any{}
+	condition := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf(" tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+	SELECT 
+		COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_day,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_week,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month
+	FROM events
+	WHERE %s
+	`, dayAgo, weekAgo, monthAgo, condition)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	data := &event.UsageData{}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
+		&data.TotalUsage,
+		&data.LastDayUsage,
+		&data.LastWeekUsage,
+		&data.LastMonthUsage,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {
@@ -794,7 +945,17 @@ func (s *Store) GetEventsV2(req *event.EventRequest) (*event.EventResponse, erro
 	return resp, nil
 }
 
+func isJSON(str string) bool {
+	var js json.RawMessage
+	return json.Unmarshal([]byte(str), &js) == nil
+}
+
 func (s *Store) InsertEvent(e *event.Event) error {
+	rawResponse := string(e.Response)
+	if !isJSON(rawResponse) {
+		e.Response = []byte(`{"bricksError": "response is not a valid json"}`)
+	}
+
 	query := `
 		INSERT INTO events (event_id, created_at, tags, key_id, cost_in_usd, provider, model, status_code, prompt_token_count, completion_token_count, latency_in_ms, path, method, custom_id, request, response, user_id, action, policy_id, route_id, correlation_id, metadata)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)

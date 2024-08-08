@@ -164,6 +164,7 @@ type RequestKey struct {
 	RateLimitOverTime      int          `json:"rateLimitOverTime"`
 	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
 	Ttl                    string       `json:"ttl"`
+	KeyRing                string       `json:"keyRing"`
 	SettingId              string       `json:"settingId"`
 	AllowedPaths           []PathConfig `json:"allowedPaths"`
 	SettingIds             []string     `json:"settingIds"`
@@ -210,6 +211,10 @@ func (rk *RequestKey) Validate() error {
 
 	if len(rk.KeyId) == 0 {
 		invalid = append(invalid, "keyId")
+	}
+
+	if len(rk.KeyRing) == 0 {
+		invalid = append(invalid, "keyRing")
 	}
 
 	if len(rk.SettingIds) != 0 {
@@ -313,6 +318,7 @@ type ResponseKey struct {
 	RateLimitOverTime      int          `json:"rateLimitOverTime"`
 	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
 	Ttl                    string       `json:"ttl"`
+	KeyRing                string       `json:"keyRing"`
 	SettingId              string       `json:"settingId"`
 	AllowedPaths           []PathConfig `json:"allowedPaths"`
 	SettingIds             []string     `json:"settingIds"`

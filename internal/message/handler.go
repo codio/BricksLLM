@@ -38,6 +38,7 @@ type estimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
+	EstimateImagesCost(model, quality, resolution string) (float64, error)
 }
 
 type azureEstimator interface {
@@ -410,6 +411,57 @@ func (h *Handler) decorateEvent(m Message) error {
 		telemetry.Incr("bricksllm.message.handler.decorate_event.message_data_parsing_error", nil, 1)
 		h.log.Debug("message contains data that cannot be converted to event with request and response format", zap.Any("data", m.Data))
 		return errors.New("message data cannot be parsed as event with request and response")
+	}
+
+	if e.Event.Path == "/api/providers/openai/v1/images/generations" {
+		gir, ok := e.Request.(*goopenai.ImageRequest)
+		if !ok {
+			telemetry.Incr("bricksllm.message.handler.decorate_event.event_request_parsing_error", nil, 1)
+			h.log.Debug("event contains request that cannot be converted to openai image request", zap.Any("data", m.Data))
+			return errors.New("event request data cannot be parsed as openai image request")
+		}
+		if e.Event.Status == http.StatusOK {
+			cost, err := h.e.EstimateImagesCost(string(gir.Model), string(gir.Quality), string(gir.Size))
+			if err != nil {
+				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
+				return err
+			}
+			e.Event.CostInUsd = cost
+		}
+	}
+
+	if e.Event.Path == "/api/providers/openai/v1/images/edits" {
+		eir, ok := e.Request.(*goopenai.ImageEditRequest)
+		if !ok {
+			telemetry.Incr("bricksllm.message.handler.decorate_event.event_request_parsing_error", nil, 1)
+			h.log.Debug("event contains request that cannot be converted to openai image edit request", zap.Any("data", m.Data))
+			return errors.New("event request data cannot be parsed as openai image edit request")
+		}
+		if e.Event.Status == http.StatusOK {
+			cost, err := h.e.EstimateImagesCost(string(eir.Model), "", string(eir.Size))
+			if err != nil {
+				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
+				return err
+			}
+			e.Event.CostInUsd = cost
+		}
+	}
+
+	if e.Event.Path == "/api/providers/openai/v1/images/variations" {
+		vir, ok := e.Request.(*goopenai.ImageVariRequest)
+		if !ok {
+			telemetry.Incr("bricksllm.message.handler.decorate_event.event_request_parsing_error", nil, 1)
+			h.log.Debug("event contains request that cannot be converted to openai image variation request", zap.Any("data", m.Data))
+			return errors.New("event request data cannot be parsed as openai image variation request")
+		}
+		if e.Event.Status == http.StatusOK {
+			cost, err := h.e.EstimateImagesCost(string(vir.Model), "", string(vir.Size))
+			if err != nil {
+				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
+				return err
+			}
+			e.Event.CostInUsd = cost
+		}
 	}
 
 	if e.Event.Path == "/api/providers/openai/v1/audio/speech" {

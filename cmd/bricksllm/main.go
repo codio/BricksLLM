@@ -228,7 +228,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := apiRedisCache.Ping(ctx).Err(); err != nil {
+	if err := accessRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to api redis cache: %v", err)
 	}
 
@@ -240,7 +240,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := rateLimitRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userRateLimitRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user rate limit redis cache: %v", err)
 	}
 
@@ -252,7 +252,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costLimitRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userCostLimitRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user cost limit redis cache: %v", err)
 	}
 
@@ -264,7 +264,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := apiRedisCache.Ping(ctx).Err(); err != nil {
+	if err := userCostRedisStorage.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user cost redis cache: %v", err)
 	}
 
@@ -276,7 +276,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := userAccessRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to user access redis storage: %v", err)
 	}
 
@@ -288,7 +288,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := providerSettingsRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to provider settings redis storage: %v", err)
 	}
 
@@ -300,7 +300,7 @@ func main() {
 
 	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	if err := costRedisStorage.Ping(ctx).Err(); err != nil {
+	if err := keysRedisCache.Ping(ctx).Err(); err != nil {
 		log.Sugar().Fatalf("error connecting to keys redis storage: %v", err)
 	}
 
@@ -318,15 +318,17 @@ func main() {
 	psCache := redisStorage.NewProviderSettingsCache(providerSettingsRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	keysCache := redisStorage.NewKeysCache(keysRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
+	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage)
+
 	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache)
-	krm := manager.NewReportingManager(costStorage, store, store)
+	krm := manager.NewReportingManager(costStorage, store, store, v)
 	psm := manager.NewProviderSettingsManager(store, psCache)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
 	rm := manager.NewRouteManager(store, store, rMemStore, psm)
 	pm := manager.NewPolicyManager(store, rMemStore)
 	um := manager.NewUserManager(store, store)
 
-	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.AdminPass)
+	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.AdminPass, cfg.XCodioSignSecret)
 	if err != nil {
 		log.Sugar().Fatalf("error creating admin http server: %v", err)
 	}
@@ -353,7 +355,6 @@ func main() {
 	vllme := vllm.NewCostEstimator(vllmtc)
 	die := deepinfra.NewCostEstimator()
 
-	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage)
 	uv := validator.NewUserValidator(userCostLimitCache, userRateLimitCache, userCostStorage)
 
 	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store)

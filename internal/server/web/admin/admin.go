@@ -36,6 +36,11 @@ type KeyManager interface {
 
 type KeyReportingManager interface {
 	GetTopKeyReporting(r *event.KeyReportingRequest) (*event.KeyReportingResponse, error)
+
+	GetTopKeyRingReporting(r *event.KeyRingReportingRequest) (*event.KeyRingReportingResponse, error)
+	GetSpentKeyReporting(r *event.SpentKeyReportingRequest) (*event.SpentKeyReportingResponse, error)
+	GetUsageReporting(r *event.UsageReportingRequest) (*event.UsageReportingResponse, error)
+
 	GetKeyReporting(keyId string) (*key.KeyReporting, error)
 	GetEvents(userId, customId string, keyIds []string, start int64, end int64) ([]*event.Event, error)
 	GetEventsV2(r *event.EventRequest) (*event.EventResponse, error)
@@ -65,11 +70,12 @@ type AdminServer struct {
 	m      KeyManager
 }
 
-func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReportingManager, psm ProviderSettingsManager, cpm CustomProvidersManager, rm RouteManager, pm PoliciesManager, um UserManager, adminPass string) (*AdminServer, error) {
+func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReportingManager, psm ProviderSettingsManager, cpm CustomProvidersManager, rm RouteManager, pm PoliciesManager, um UserManager, adminPass, xCodioSignSecret string) (*AdminServer, error) {
 	router := gin.New()
 
 	prod := mode == "production"
 	router.Use(getAdminLoggerMiddleware(log, "admin", prod, adminPass))
+	router.Use(getAdminSignRequestMiddleware(prod, xCodioSignSecret))
 
 	router.GET("/api/health", getGetHealthCheckHandler())
 
@@ -86,6 +92,10 @@ func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReporting
 	router.POST("/api/v2/events", getGetEventsV2Handler(krm, prod))
 	router.GET("/api/reporting/user-ids", getGetUserIdsHandler(krm, prod))
 	router.POST("/api/reporting/top-keys", getGetTopKeysMetricsHandler(krm, prod))
+
+	router.POST("/api/reporting/top-key-rings", getGetTopKeyRingsMetricsHandler(krm, prod))
+	router.POST("/api/reporting/spent-keys", getGetSpentKeyMetricsHandler(krm, prod))
+	router.POST("/api/reporting/usage", getGetUsageMetricsHandler(krm, prod))
 
 	router.GET("/api/reporting/custom-ids", getGetCustomIdsHandler(krm, prod))
 
@@ -150,6 +160,7 @@ func (as *AdminServer) Run() {
 		as.log.Info("PORT 8001 | POST   | /api/users is set up for creating a user")
 		as.log.Info("PORT 8001 | GET    | /api/users is set up for retrieving users")
 		as.log.Info("PORT 8001 | PATCH  | /api/users is set up for updating a user")
+		as.log.Info("PORT 8001 | POST   | /api/reporting/top-key-rings is set up retrieving top key rings")
 
 		if err := as.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			as.log.Sugar().Fatalf("error admin server listening: %v", err)

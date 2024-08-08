@@ -28,7 +28,8 @@ func (s *Store) CreateKeysTable() error {
 		cost_limit_in_usd_unit VARCHAR(255),
 		rate_limit_over_time INT,
 		rate_limit_unit VARCHAR(255),
-		ttl VARCHAR(255)
+		ttl VARCHAR(255),
+		key_ring VARCHAR(255)
 	)`
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -179,6 +180,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
 			&k.Ttl,
+			&k.KeyRing,
 			&settingId,
 			&data,
 			pq.Array(&k.SettingIds),
@@ -303,6 +305,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
 			&k.Ttl,
+			&k.KeyRing,
 			&settingId,
 			&data,
 			pq.Array(&k.SettingIds),
@@ -381,6 +384,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
 		&k.Ttl,
+		&k.KeyRing,
 		&settingId,
 		&data,
 		pq.Array(&k.SettingIds),
@@ -444,6 +448,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
 			&k.Ttl,
+			&k.KeyRing,
 			&settingId,
 			&data,
 			pq.Array(&k.SettingIds),
@@ -478,6 +483,99 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 	return keys[0], nil
 }
 
+func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error) {
+	args := []any{}
+	condition := ""
+
+	index := 1
+	if len(tags) > 0 {
+		condition += fmt.Sprintf(" AND tags @> $%d", index)
+
+		args = append(args, pq.Array(tags))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+	SELECT * FROM keys
+	WHERE keys.revoked = False OR keys.revoked_reason = 'expired' %s
+	`, condition)
+
+	qorder := "DESC"
+	if len(order) != 0 && strings.ToUpper(order) == "ASC" {
+		qorder = "ASC"
+	}
+
+	query += fmt.Sprintf(`
+	ORDER BY created_at %s 
+`, qorder)
+
+	if limit != 0 {
+		query += fmt.Sprintf(`
+		LIMIT %d OFFSET %d;
+	`, limit, offset)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	invalidKeyRings := []string{}
+	for rows.Next() {
+		var k key.ResponseKey
+		var settingId sql.NullString
+		var data []byte
+		if err := rows.Scan(
+			&k.Name,
+			&k.CreatedAt,
+			&k.UpdatedAt,
+			pq.Array(&k.Tags),
+			&k.Revoked,
+			&k.KeyId,
+			&k.Key,
+			&k.RevokedReason,
+			&k.CostLimitInUsd,
+			&k.CostLimitInUsdOverTime,
+			&k.CostLimitInUsdUnit,
+			&k.RateLimitOverTime,
+			&k.RateLimitUnit,
+			&k.Ttl,
+			&k.KeyRing,
+			&settingId,
+			&data,
+			pq.Array(&k.SettingIds),
+			&k.ShouldLogRequest,
+			&k.ShouldLogResponse,
+			&k.RotationEnabled,
+			&k.PolicyId,
+			&k.IsKeyNotHashed,
+		); err != nil {
+			return nil, err
+		}
+		pk := &k
+		pk.SettingId = settingId.String
+
+		if len(data) != 0 {
+			pathConfigs := []key.PathConfig{}
+			if err := json.Unmarshal(data, &pathConfigs); err != nil {
+				return nil, err
+			}
+
+			pk.AllowedPaths = pathConfigs
+		}
+
+		if !validator(pk) {
+			invalidKeyRings = append(invalidKeyRings, pk.KeyRing)
+		}
+	}
+
+	return invalidKeyRings, nil
+}
+
 func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -508,6 +606,7 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
 			&k.Ttl,
+			&k.KeyRing,
 			&settingId,
 			&data,
 			pq.Array(&k.SettingIds),
@@ -567,6 +666,7 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
 			&k.Ttl,
+			&k.KeyRing,
 			&settingId,
 			&data,
 			pq.Array(&k.SettingIds),
@@ -744,6 +844,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
 		&k.Ttl,
+		&k.KeyRing,
 		&settingId,
 		&data,
 		pq.Array(&k.SettingIds),
@@ -776,8 +877,8 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 
 func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 	query := `
-		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, key_ring, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
 		RETURNING *;
 	`
 
@@ -801,6 +902,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		rk.RateLimitOverTime,
 		rk.RateLimitUnit,
 		rk.Ttl,
+		rk.KeyRing,
 		rk.SettingId,
 		rdata,
 		sliceToSqlStringArray(rk.SettingIds),
@@ -833,6 +935,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
 		&k.Ttl,
+		&k.KeyRing,
 		&settingId,
 		&data,
 		pq.Array(&k.SettingIds),
