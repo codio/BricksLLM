@@ -3,6 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,20 +28,27 @@ type ProviderSettingsCache interface {
 	Delete(pid string) error
 }
 
-type ProviderSettingsManager struct {
-	Storage ProviderSettingsStorage
-	Cache   ProviderSettingsCache
+type Encryptor interface {
+	Encrypt(input string, headers map[string]string) (string, error)
+	Enabled() bool
 }
 
-func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSettingsCache) *ProviderSettingsManager {
+type ProviderSettingsManager struct {
+	Storage   ProviderSettingsStorage
+	Cache     ProviderSettingsCache
+	Encryptor Encryptor
+}
+
+func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSettingsCache, encryptor Encryptor) *ProviderSettingsManager {
 	return &ProviderSettingsManager{
-		Storage: s,
-		Cache:   cache,
+		Storage:   s,
+		Cache:     cache,
+		Encryptor: encryptor,
 	}
 }
 
 func isProviderNativelySupported(provider string) bool {
-	return provider == "openai" || provider == "anthropic" || provider == "azure" || provider == "vllm" || provider == "deepinfra"
+	return provider == "openai" || provider == "anthropic" || provider == "azure" || provider == "vllm" || provider == "deepinfra" || provider == "bedrock"
 }
 
 func findMissingAuthParams(providerName string, params map[string]string) string {
@@ -53,6 +61,23 @@ func findMissingAuthParams(providerName string, params map[string]string) string
 		}
 
 		return strings.Join(missingFields, " ,")
+	}
+
+	if providerName == "bedrock" {
+		val := params["awsAccessKeyId"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "awsAccessKeyId")
+		}
+
+		val = params["awsSecretAccessKey"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "awsSecretAccessKey")
+		}
+
+		val = params["awsRegion"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "awsRegion")
+		}
 	}
 
 	if providerName == "azure" {
@@ -101,6 +126,27 @@ func (m *ProviderSettingsManager) validateSettings(providerName string, setting 
 	return nil
 }
 
+func (m *ProviderSettingsManager) EncryptParams(updatedAt int64, provider string, params map[string]string) (map[string]string, error) {
+	if provider == "amazon" {
+		encryted, err := m.Encryptor.Encrypt(params["awsSecretAccessKey"], map[string]string{"X-UPDATED-AT": strconv.FormatInt(updatedAt, 10)})
+		if err != nil {
+			return nil, err
+		}
+
+		params["awsSecretAccessKey"] = encryted
+
+	} else if provider == "openai" || provider == "anthropic" || provider == "deepinfra" || provider == "azure" {
+		encryted, err := m.Encryptor.Encrypt(params["apikey"], map[string]string{"X-UPDATED-AT": strconv.FormatInt(updatedAt, 10)})
+		if err != nil {
+			return nil, err
+		}
+
+		params["apikey"] = encryted
+	}
+
+	return params, nil
+}
+
 func (m *ProviderSettingsManager) CreateSetting(setting *provider.Setting) (*provider.Setting, error) {
 	if len(setting.Provider) == 0 {
 		return nil, internal_errors.NewValidationError("provider field cannot be empty")
@@ -113,6 +159,15 @@ func (m *ProviderSettingsManager) CreateSetting(setting *provider.Setting) (*pro
 	setting.Id = util.NewUuid()
 	setting.CreatedAt = time.Now().Unix()
 	setting.UpdatedAt = time.Now().Unix()
+
+	if m.Encryptor.Enabled() {
+		params, err := m.EncryptParams(setting.UpdatedAt, setting.Provider, setting.Setting)
+		if err != nil {
+			return nil, err
+		}
+
+		setting.Setting = params
+	}
 
 	return m.Storage.CreateProviderSetting(setting)
 }
@@ -147,6 +202,15 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 		telemetry.Incr("bricksllm.provider_settings_manager.update_setting.delete_cache_error", nil, 1)
 	}
 
+	if m.Encryptor.Enabled() {
+		params, err := m.EncryptParams(setting.UpdatedAt, existing.Provider, setting.Setting)
+		if err != nil {
+			return nil, err
+		}
+
+		setting.Setting = params
+	}
+
 	return m.Storage.UpdateProviderSetting(id, setting)
 }
 
@@ -166,7 +230,7 @@ func (m *ProviderSettingsManager) GetSettingViaCache(id string) (*provider.Setti
 			return stored, nil
 		}
 
-		err = m.Cache.Set(id, bs, time.Hour)
+		err = m.Cache.Set(id, bs, 24*time.Hour)
 		if err != nil {
 			telemetry.Incr("bricksllm.provider_settings_manager.get_setting_via_cache.set_error", nil, 1)
 		}

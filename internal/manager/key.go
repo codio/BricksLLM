@@ -214,12 +214,16 @@ func (m *Manager) GetKeyViaCache(raw string) (*key.ResponseKey, error) {
 			return stored, nil
 		}
 
-		err = m.kc.Set(raw, bs, time.Hour)
+		err = m.kc.Set(raw, bs, 24*time.Hour)
 		if err != nil {
 			telemetry.Incr("bricksllm.manager.get_key_via_cache.set_error", nil, 1)
 		}
 
 		k = stored
+	}
+
+	if k != nil {
+		telemetry.Incr("bricksllm.manager.get_key_via_cache.cache_hit", nil, 1)
 	}
 
 	return k, nil

@@ -1,3 +1,60 @@
+## 1.39.0 - 2024-11-15
+### Added
+- Added encryption integration
+
+### Changed
+- Removed support for Redis TLS config
+
+
+## 1.38.0 - 2024-11-09
+### Added
+- Added support for `claude-3-5-haiku`
+- Added support for Redis TLS config
+- Added support for `gpt-4o-2024-08-06`
+
+## 1.37.0 - 2024-10-23
+### Added
+- Added request level timeout with HTTP header `x-request-timeout`
+
+## 1.36.5 - 2024-10-16
+### Changed
+- Updated `gpt-4o` pricing according to OpenAI updates
+
+## 1.36.4 - 2024-10-15
+### Added
+- Added support for `gpt-4o-mini` in routes
+
+## 1.36.3 - 2024-09-16
+### Added
+- Added support for OpenAI o1 models
+
+## 1.36.2 - 2024-09-13
+### Fixed
+- Fixed compatibility issues between Anthropic SDK and AWS Bedrock
+  
+## 1.36.1 - 2024-09-10
+### Fixed
+- Fixed provider selection issue when a key is associated with multiple providers
+
+## 1.36.0 - 2024-09-09
+### Added
+- Added Amazon Bedrock integration for Claude models
+
+## 1.35.2 - 2024-08-10
+### Changed
+- Changed aggregated table column data types from `INT` to `BIGINT`
+
+## 1.35.1 - 2024-08-10
+### Changed
+- Changed cache TTL from `1h` to `24h` for keys and provider settings
+
+## 1.35.0 - 2024-08-10
+### Added
+- Added cost tracking for `gpt-4o-2024-08-06`
+
+### Changed
+- Changed default read time out for PostgreSQL
+
 ## 1.34.0 - 2024-07-29
 ### Added
 - Added cost tracking for `gpt-4o-mini`
