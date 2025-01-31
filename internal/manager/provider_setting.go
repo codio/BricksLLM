@@ -3,6 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,8 @@ type ProviderSettingsManager struct {
 	Encryptor Encryptor
 }
 
+var nativelySupportedProviders = []string{"openai", "anthropic", "azure", "vllm", "deepinfra", "bedrock", "xCustom"}
+
 func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSettingsCache, encryptor Encryptor) *ProviderSettingsManager {
 	return &ProviderSettingsManager{
 		Storage:   s,
@@ -48,7 +51,7 @@ func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSetting
 }
 
 func isProviderNativelySupported(provider string) bool {
-	return provider == "openai" || provider == "anthropic" || provider == "azure" || provider == "vllm" || provider == "deepinfra" || provider == "bedrock"
+	return slices.Contains(nativelySupportedProviders, provider)
 }
 
 func findMissingAuthParams(providerName string, params map[string]string) string {
@@ -96,6 +99,25 @@ func findMissingAuthParams(providerName string, params map[string]string) string
 		val := params["url"]
 		if len(val) == 0 {
 			missingFields = append(missingFields, "url")
+		}
+	}
+
+	if providerName == "xCustom" {
+		val := params["apikey"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "apikey")
+		}
+		val = params["endpoint"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "endpoint")
+		}
+		val = params["header"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "header")
+		}
+		val = params["maskAuth"]
+		if !strings.Contains(val, "{{apikey}}") {
+			missingFields = append(missingFields, "maskAuth")
 		}
 	}
 
