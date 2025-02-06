@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"io"
 	"net/http"
 	"strconv"
@@ -67,7 +68,7 @@ type deepinfraEstimator interface {
 }
 
 type authenticator interface {
-	AuthenticateHttpRequest(req *http.Request) (*key.ResponseKey, []*provider.Setting, error)
+	AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error)
 }
 
 type validator interface {
@@ -304,7 +305,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			return
 		}
 
-		kc, settings, err := a.AuthenticateHttpRequest(c.Request)
+		kc, settings, err := a.AuthenticateHttpRequest(c.Request, c.Param(xcustom.XProviderIdParam))
 		enrichedEvent.Key = kc
 		_, ok := err.(notAuthorizedError)
 		if ok {

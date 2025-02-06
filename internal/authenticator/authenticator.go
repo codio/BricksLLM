@@ -3,6 +3,8 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
+	"github.com/go-viper/mapstructure/v2"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -77,6 +79,33 @@ func getApiKey(req *http.Request) (string, error) {
 	}
 
 	return "", internal_errors.NewAuthError("api key not found in header")
+}
+
+func (a *Authenticator) getApiKeyByXCustomProvider(req *http.Request, xCustomProviderId string) (key string, pSettings []*provider.Setting, err error) {
+	providerSetting, err := a.psm.GetSettingViaCache(xCustomProviderId)
+	if err != nil {
+		return
+	}
+	pSettings = []*provider.Setting{providerSetting}
+	setting := providerSetting.Setting
+	if setting == nil {
+		err = internal_errors.NewAuthError("provider settings not found")
+		return
+	}
+	fmt.Printf("xCustomProviderId: %s, setting: %+v\n", xCustomProviderId, setting)
+	var xCustomSetting *xcustom.XCustomSettings
+	err = mapstructure.Decode(setting, &xCustomSetting)
+	if err != nil {
+		err = internal_errors.NewAuthError("provider settings error")
+		return
+	}
+	header := req.Header.Get(xCustomSetting.Header)
+	key, err = xcustom.ExtractBricksKey(header, xCustomSetting.MaskAuth)
+	if err != nil {
+		err = internal_errors.NewAuthError("provider settings error")
+		return
+	}
+	return
 }
 
 func rewriteHttpAuthHeader(req *http.Request, setting *provider.Setting) error {
@@ -204,8 +233,15 @@ func anonymize(input string) string {
 	return string(input[0:5]) + "**********************************************"
 }
 
-func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.ResponseKey, []*provider.Setting, error) {
-	raw, err := getApiKey(req)
+func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error) {
+	var raw string
+	var err error
+	var settings []*provider.Setting
+	if xcustom.IsXCustomRequest(req) {
+		raw, settings, err = a.getApiKeyByXCustomProvider(req, xCustomProviderId)
+	} else {
+		raw, err = getApiKey(req)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -236,6 +272,13 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.Respons
 
 	if key.Revoked {
 		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s has been revoked", anonymize(raw)))
+	}
+
+	if xcustom.IsXCustomRequest(req) {
+		authHeaderK := settings[0].GetParam("header")
+		authHeaderV := strings.Replace(settings[0].GetParam("maskAuth"), "{{apikey}}", settings[0].GetParam("apikey"), -1)
+		req.Header.Set(authHeaderK, authHeaderV)
+		return key, settings, nil
 	}
 
 	if strings.HasPrefix(req.URL.Path, "/api/routes") {

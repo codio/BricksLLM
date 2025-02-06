@@ -221,7 +221,7 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 	router.GET("/api/providers/openai/v1/vector_stores/:vector_store_id/file_batches/:batch_id/files", getListVectorStoreFileBatchFilesHandler(prod, client))
 
 	// codio xCustom
-	router.Any("/api/providers/xCustom/:x_provider_id/*wildcard", getXCustomHandler(prod, client))
+	router.Any("/api/providers/xCustom/:x_provider_id/*wildcard", getXCustomHandler(prod))
 
 	srv := &http.Server{
 		Addr:    ":8002",
