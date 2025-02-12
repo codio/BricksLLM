@@ -8,10 +8,10 @@ import (
 )
 
 type XCustomSettings struct {
-	Apikey   string `json:"apikey"`
-	Endpoint string `json:"endpoint"`
-	Header   string `json:"header"`
-	MaskAuth string `json:"maskAuth"`
+	Apikey       string `json:"apikey"`
+	Endpoint     string `json:"endpoint"`
+	AuthHeader   string `json:"authHeader"`
+	AuthTemplate string `json:"authTemplate"`
 }
 
 const XProviderIdParam = "x_provider_id"
