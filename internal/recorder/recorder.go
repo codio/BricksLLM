@@ -6,12 +6,13 @@ import (
 )
 
 type Recorder struct {
-	s  Store
-	c  Cache
-	us Store
-	uc Cache
-	ce CostEstimator
-	es EventsStore
+	s             Store
+	c             Cache
+	us            Store
+	uc            Cache
+	ce            CostEstimator
+	es            EventsStore
+	reqLimitStore Store
 }
 
 type EventsStore interface {
@@ -31,14 +32,15 @@ type CostEstimator interface {
 	EstimateCompletionCost(model string, tks int) (float64, error)
 }
 
-func NewRecorder(s, us Store, c, uc Cache, ce CostEstimator, es EventsStore) *Recorder {
+func NewRecorder(s, us Store, c, uc Cache, ce CostEstimator, es EventsStore, reqLimitStore Store) *Recorder {
 	return &Recorder{
-		s:  s,
-		c:  c,
-		us: us,
-		uc: uc,
-		ce: ce,
-		es: es,
+		s:             s,
+		c:             c,
+		us:            us,
+		uc:            uc,
+		ce:            ce,
+		es:            es,
+		reqLimitStore: reqLimitStore,
 	}
 }
 
@@ -59,7 +61,11 @@ func (r *Recorder) RecordUserSpend(userId string, micros int64, costLimitUnit ke
 }
 
 func (r *Recorder) RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit) error {
-	err := r.s.IncrementCounter(keyId, micros)
+	err := r.reqLimitStore.IncrementCounter(keyId, 1)
+	if err != nil {
+		return err
+	}
+	err = r.s.IncrementCounter(keyId, micros)
 	if err != nil {
 		return err
 	}

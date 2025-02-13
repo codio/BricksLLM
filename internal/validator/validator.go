@@ -21,21 +21,28 @@ type costLimitStorage interface {
 	GetCounter(keyId string) (int64, error)
 }
 
+type requestsLimitStorage interface {
+	GetCounter(keyId string) (int64, error)
+}
+
 type Validator struct {
-	clc costLimitCache
-	rlc rateLimitCache
-	cls costLimitStorage
+	clc  costLimitCache
+	rlc  rateLimitCache
+	cls  costLimitStorage
+	rqls requestsLimitStorage
 }
 
 func NewValidator(
 	clc costLimitCache,
 	rlc rateLimitCache,
 	cls costLimitStorage,
+	rqls requestsLimitStorage,
 ) *Validator {
 	return &Validator{
-		clc: clc,
-		rlc: rlc,
-		cls: cls,
+		clc:  clc,
+		rlc:  rlc,
+		cls:  cls,
+		rqls: rqls,
 	}
 }
 
@@ -53,7 +60,12 @@ func (v *Validator) Validate(k *key.ResponseKey, promptCost float64) error {
 		return internal_errors.NewExpirationError("api key expired", internal_errors.TtlExpiration)
 	}
 
-	err := v.validateRateLimitOverTime(k.KeyId, k.RateLimitOverTime, k.RateLimitUnit)
+	err := v.validateRequestsLimit(k.KeyId, k.RequestsLimit)
+	if err != nil {
+		return err
+	}
+
+	err = v.validateRateLimitOverTime(k.KeyId, k.RateLimitOverTime, k.RateLimitUnit)
 	if err != nil {
 		return err
 	}
@@ -134,5 +146,19 @@ func (v *Validator) validateCostLimit(keyId string, costLimit float64) error {
 		return internal_errors.NewExpirationError(fmt.Sprintf("total cost limit: %f has been reached", costLimit), internal_errors.CostLimitExpiration)
 	}
 
+	return nil
+}
+
+func (v *Validator) validateRequestsLimit(keyId string, requestsLimit int) error {
+	if requestsLimit == 0 {
+		return nil
+	}
+	existingTotalRequests, err := v.rqls.GetCounter(keyId)
+	if err != nil {
+		return errors.New("failed to get total requests")
+	}
+	if existingTotalRequests >= int64(requestsLimit) {
+		return internal_errors.NewRequestsLimitError(fmt.Sprintf("total requests limit: %d, has been reached", requestsLimit))
+	}
 	return nil
 }

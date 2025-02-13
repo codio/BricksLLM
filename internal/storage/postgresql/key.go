@@ -28,6 +28,7 @@ func (s *Store) CreateKeysTable() error {
 		cost_limit_in_usd_unit VARCHAR(255),
 		rate_limit_over_time INT,
 		rate_limit_unit VARCHAR(255),
+	    requests_limit INT,
 		ttl VARCHAR(255),
 		key_ring VARCHAR(255)
 	)`
@@ -56,7 +57,7 @@ func (s *Store) AlterKeysTable() error {
 			END IF;
 		END
 		$$;
-		ALTER TABLE keys ADD COLUMN IF NOT EXISTS setting_id VARCHAR(255), ADD COLUMN IF NOT EXISTS allowed_paths JSONB, ADD COLUMN IF NOT EXISTS setting_ids VARCHAR(255)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(255)[], ADD COLUMN IF NOT EXISTS should_log_request BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS should_log_response BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS rotation_enabled BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS policy_id VARCHAR(255) NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS is_key_not_hashed BOOLEAN NOT NULL DEFAULT FALSE;
+		ALTER TABLE keys ADD COLUMN IF NOT EXISTS setting_id VARCHAR(255), ADD COLUMN IF NOT EXISTS allowed_paths JSONB, ADD COLUMN IF NOT EXISTS setting_ids VARCHAR(255)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(255)[], ADD COLUMN IF NOT EXISTS should_log_request BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS should_log_response BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS rotation_enabled BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS policy_id VARCHAR(255) NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS is_key_not_hashed BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS requests_limit INT;
 	`
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -179,6 +180,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -304,6 +306,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -383,6 +386,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
+		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,
@@ -447,6 +451,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -543,6 +548,7 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -605,6 +611,7 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -665,6 +672,7 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
+			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -843,6 +851,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
+		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,
@@ -934,6 +943,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
+		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,

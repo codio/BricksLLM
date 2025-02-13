@@ -92,7 +92,6 @@ func (a *Authenticator) getApiKeyByXCustomProvider(req *http.Request, xCustomPro
 		err = internal_errors.NewAuthError("provider settings not found")
 		return
 	}
-	fmt.Printf("xCustomProviderId: %s, setting: %+v\n", xCustomProviderId, setting)
 	var xCustomSetting *xcustom.XCustomSettings
 	err = mapstructure.Decode(setting, &xCustomSetting)
 	if err != nil {
