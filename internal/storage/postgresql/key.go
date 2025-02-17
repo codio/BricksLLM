@@ -29,7 +29,6 @@ func (s *Store) CreateKeysTable() error {
 		cost_limit_in_usd_unit VARCHAR(255),
 		rate_limit_over_time INT,
 		rate_limit_unit VARCHAR(255),
-	    requests_limit INT,
 		ttl VARCHAR(255),
 		key_ring VARCHAR(255)
 	)`
@@ -181,7 +180,6 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -192,6 +190,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -307,7 +306,6 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -318,6 +316,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -387,7 +386,6 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
-		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,
@@ -398,6 +396,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.RotationEnabled,
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
+		&k.RequestsLimit,
 	)
 
 	if err != nil {
@@ -452,7 +451,6 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -463,6 +461,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +548,6 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -560,6 +558,7 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -615,7 +614,6 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -626,6 +624,7 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -676,7 +675,6 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.CostLimitInUsdUnit,
 			&k.RateLimitOverTime,
 			&k.RateLimitUnit,
-			&k.RequestsLimit,
 			&k.Ttl,
 			&k.KeyRing,
 			&settingId,
@@ -687,6 +685,7 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.RotationEnabled,
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
+			&k.RequestsLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -855,7 +854,6 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
-		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,
@@ -866,6 +864,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.RotationEnabled,
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
+		&k.RequestsLimit,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, internal_errors.NewNotFoundError(fmt.Sprintf("key not found for id: %s", id))
@@ -890,8 +889,8 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 
 func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 	query := `
-		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, key_ring, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, key_ring, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed, requests_limit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 		RETURNING *;
 	`
 
@@ -924,6 +923,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		rk.RotationEnabled,
 		rk.PolicyId,
 		rk.IsKeyNotHashed,
+		rk.RequestsLimit,
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -947,7 +947,6 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.CostLimitInUsdUnit,
 		&k.RateLimitOverTime,
 		&k.RateLimitUnit,
-		&k.RequestsLimit,
 		&k.Ttl,
 		&k.KeyRing,
 		&settingId,
@@ -958,6 +957,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.RotationEnabled,
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
+		&k.RequestsLimit,
 	); err != nil {
 		return nil, err
 	}
