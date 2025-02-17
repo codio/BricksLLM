@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/event"
 	"strings"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
@@ -488,7 +489,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 	return keys[0], nil
 }
 
-func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error) {
+func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]event.SpentKey, error) {
 	args := []any{}
 	condition := ""
 
@@ -529,7 +530,7 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 	}
 	defer rows.Close()
 
-	invalidKeyRings := []string{}
+	var invalidKeyRings []event.SpentKey
 	for rows.Next() {
 		var k key.ResponseKey
 		var settingId sql.NullString
@@ -575,7 +576,10 @@ func (s *Store) GetSpentKeyRings(tags []string, order string, limit, offset int,
 		}
 
 		if !validator(pk) {
-			invalidKeyRings = append(invalidKeyRings, pk.KeyRing)
+			invalidKeyRings = append(invalidKeyRings, event.SpentKey{
+				KeyRing:     pk.KeyRing,
+				LinkedKeyId: pk.KeyId,
+			})
 		}
 	}
 

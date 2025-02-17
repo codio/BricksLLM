@@ -14,7 +14,7 @@ type costStorage interface {
 
 type keyStorage interface {
 	GetKey(keyId string) (*key.ResponseKey, error)
-	GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error)
+	GetSpentKeys(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]event.SpentKey, error)
 }
 
 type keyValidator interface {
@@ -160,12 +160,12 @@ func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingReque
 		return true
 	}
 
-	spentKeys, err := rm.ks.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset, validator)
+	spentKeys, err := rm.ks.GetSpentKeys(r.Tags, r.Order, r.Limit, r.Offset, validator)
 	if err != nil {
 		return nil, err
 	}
 	return &event.SpentKeyReportingResponse{
-		KeyRings: spentKeys,
+		Keys: spentKeys,
 	}, nil
 }
 

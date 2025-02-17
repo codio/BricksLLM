@@ -47,8 +47,13 @@ type SpentKeyReportingRequest struct {
 	Offset int      `json:"offset"`
 }
 
+type SpentKey struct {
+	KeyRing     string `json:"keyRing"`
+	LinkedKeyId string `json:"linkedKeyId"`
+}
+
 type SpentKeyReportingResponse struct {
-	KeyRings []string `json:"keyRings"`
+	Keys []SpentKey `json:"keys"`
 }
 
 type UsageReportingRequest struct {
