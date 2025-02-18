@@ -529,7 +529,7 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 	}
 	defer rows.Close()
 
-	var invalidKeyRings []event.SpentKey
+	invalidKeyRings := []event.SpentKey{}
 	for rows.Next() {
 		var k key.ResponseKey
 		var settingId sql.NullString
