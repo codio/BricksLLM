@@ -497,19 +497,10 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	}
 
 	if len(tags) > 0 {
-		condition2 += fmt.Sprintf("AND keys.tags @> $%d", index)
+		condition2 += fmt.Sprintf("AND events.tags @> $%d", index)
 
 		args = append(args, pq.Array(tags))
 		index++
-	}
-
-	if revoked != nil {
-		bools := "False"
-		if *revoked {
-			bools = "True"
-		}
-
-		condition2 += fmt.Sprintf(" AND keys.revoked = %s", bools)
 	}
 
 	query := fmt.Sprintf(`
