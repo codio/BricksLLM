@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/lib/pq"
 )
+
+var allowedTopBy = []string{"total_cost_in_usd", "total_requests"}
 
 func (s *Store) CreateEventsByDayTable() error {
 	createTableQuery := `
@@ -533,7 +536,7 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	}
 
 	qtopBy := "total_cost_in_usd"
-	if topBy != "" {
+	if topBy != "" && slices.Contains(allowedTopBy, topBy) {
 		qtopBy = topBy
 	}
 	query += fmt.Sprintf(`
