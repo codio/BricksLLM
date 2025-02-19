@@ -274,8 +274,8 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	}
 
 	if xcustom.IsXCustomRequest(req) {
-		authHeaderK := settings[0].GetParam("header")
-		authHeaderV := strings.Replace(settings[0].GetParam("maskAuth"), "{{apikey}}", settings[0].GetParam("apikey"), -1)
+		authHeaderK := settings[0].GetParam("authHeader")
+		authHeaderV := strings.Replace(settings[0].GetParam("authTemplate"), "{{apikey}}", settings[0].GetParam("apikey"), -1)
 		req.Header.Set(authHeaderK, authHeaderV)
 		return key, settings, nil
 	}
