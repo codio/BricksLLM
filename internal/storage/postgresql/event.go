@@ -471,7 +471,7 @@ func (s *Store) GetTopKeyDataPoints(start, end int64, tags, keyIds []string, ord
 	return data, nil
 }
 
-func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error) {
+func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error) {
 	args := []any{}
 	condition := ""
 	condition2 := ""
@@ -517,7 +517,8 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	(
 		SELECT 
 		key_ring,
-		SUM(cost_in_usd) AS total_cost_in_usd
+		SUM(cost_in_usd) AS total_cost_in_usd,
+		COUNT(*) AS total_requests
 		FROM events
 		LEFT JOIN keys
 		ON keys.key_id = events.key_id
@@ -531,9 +532,13 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 		qorder = "ASC"
 	}
 
+	qtopBy := "total_cost_in_usd"
+	if topBy != "" {
+		qtopBy = topBy
+	}
 	query += fmt.Sprintf(`
-	ORDER BY total_cost_in_usd %s 
-`, qorder)
+	ORDER BY %s %s 
+`, qtopBy, qorder)
 
 	if limit != 0 {
 		query += fmt.Sprintf(`
@@ -558,6 +563,7 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 		additional := []any{
 			&keyRing,
 			&e.CostInUsd,
+			&e.Requests,
 		}
 
 		if err := rows.Scan(
@@ -597,10 +603,14 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 		COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
 		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_day,
 		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_week,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month,
+		COALESCE(SUM(1), 0) AS total_requests,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_day,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_week,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_month
 	FROM events
 	WHERE %s
-	`, dayAgo, weekAgo, monthAgo, condition)
+	`, dayAgo, weekAgo, monthAgo, dayAgo, weekAgo, monthAgo, condition)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -611,6 +621,10 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 		&data.LastDayUsage,
 		&data.LastWeekUsage,
 		&data.LastMonthUsage,
+		&data.TotalUsageRequests,
+		&data.LastDayUsageRequests,
+		&data.LastWeekUsageRequests,
+		&data.LastMonthUsageRequests,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

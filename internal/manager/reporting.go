@@ -31,7 +31,7 @@ type eventStorage interface {
 	GetCustomIds(keyId string) ([]string, error)
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
 
-	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
+	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
 }
 
@@ -130,7 +130,7 @@ func (rm *ReportingManager) GetTopKeyRingReporting(r *event.KeyRingReportingRequ
 		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
 	}
 
-	dataPoints, err := rm.es.GetTopKeyRingDataPoints(r.Start, r.End, r.Tags, r.Order, r.Limit, r.Offset, r.Revoked)
+	dataPoints, err := rm.es.GetTopKeyRingDataPoints(r.Start, r.End, r.Tags, r.Order, r.Limit, r.Offset, r.Revoked, r.TopBy)
 	if err != nil {
 		return nil, err
 	}

@@ -29,11 +29,13 @@ type KeyRingReportingRequest struct {
 	Limit   int      `json:"limit"`
 	Offset  int      `json:"offset"`
 	Revoked *bool    `json:"revoked"`
+	TopBy   string   `json:"topBy"`
 }
 
 type KeyRingDataPoint struct {
 	KeyRing   string  `json:"keyRing"`
 	CostInUsd float64 `json:"costInUsd"`
+	Requests  int     `json:"requests"`
 }
 
 type KeyRingReportingResponse struct {
@@ -61,10 +63,14 @@ type UsageReportingRequest struct {
 }
 
 type UsageData struct {
-	LastDayUsage   float64 `json:"lastDayUsage"`
-	LastWeekUsage  float64 `json:"lastWeekUsage"`
-	LastMonthUsage float64 `json:"lastMonthUsage"`
-	TotalUsage     float64 `json:"totalUsage"`
+	LastDayUsage           float64 `json:"lastDayUsage"`
+	LastWeekUsage          float64 `json:"lastWeekUsage"`
+	LastMonthUsage         float64 `json:"lastMonthUsage"`
+	TotalUsage             float64 `json:"totalUsage"`
+	LastDayUsageRequests   int     `json:"lastDayUsageRequests"`
+	LastWeekUsageRequests  int     `json:"lastWeekUsageRequests"`
+	LastMonthUsageRequests int     `json:"lastMonthUsageRequests"`
+	TotalUsageRequests     int     `json:"totalUsageRequests"`
 }
 
 type UsageReportingResponse struct {
