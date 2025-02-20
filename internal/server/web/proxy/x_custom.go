@@ -72,6 +72,12 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 				r.RequestURI = target.RequestURI()
 				r.Host = target.Host
 				r = r.WithContext(ctx)
+
+				r.Header.Del("X-Amzn-Trace-Id")
+				r.Header.Del("X-Forwarded-For")
+				r.Header.Del("X-Forwarded-Port")
+				r.Header.Del("X-Forwarded-Proto")
+
 				dumpB, _ := httputil.DumpRequest(r, true)
 				fmt.Println("=======dumpB===========")
 				fmt.Println(string(dumpB))
