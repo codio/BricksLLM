@@ -66,6 +66,8 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 		c.Request.Header.Del("X-Forwarded-For")
 		c.Request.Header.Del("X-Forwarded-Port")
 		c.Request.Header.Del("X-Forwarded-Proto")
+		fmt.Println("=========HEADERS==============")
+		fmt.Println(c.Request.Header)
 		fmt.Println("=======dumpA===========")
 		fmt.Println(string(dumpA))
 		proxy := &httputil.ReverseProxy{
