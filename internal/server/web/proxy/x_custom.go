@@ -66,8 +66,7 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 		c.Request.Header.Del("X-Forwarded-For")
 		c.Request.Header.Del("X-Forwarded-Port")
 		c.Request.Header.Del("X-Forwarded-Proto")
-		c.Request.Header.Del("Accept")
-		fmt.Println("=========HEADERS2==============")
+		fmt.Println("=========HEADERS3==============")
 		fmt.Println(c.Request.Header)
 		fmt.Println("=======dumpA===========")
 		fmt.Println(string(dumpA))
@@ -84,7 +83,6 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 				r.Header.Del("X-Forwarded-For")
 				r.Header.Del("X-Forwarded-Port")
 				r.Header.Del("X-Forwarded-Proto")
-				r.Header.Del("Accept")
 
 				dumpB, _ := httputil.DumpRequest(r, true)
 				fmt.Println("=======dumpB===========")
