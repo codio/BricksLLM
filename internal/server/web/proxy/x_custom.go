@@ -61,6 +61,9 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, "[BricksLLM] invalid endpoint")
 			return
 		}
+		dumpA, _ := httputil.DumpRequest(c.Request, true)
+		fmt.Println("=======dumpA===========")
+		fmt.Println(string(dumpA))
 		proxy := &httputil.ReverseProxy{
 			Director: func(r *http.Request) {
 				r.URL.Scheme = target.Scheme
@@ -69,6 +72,9 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 				r.RequestURI = target.RequestURI()
 				r.Host = target.Host
 				r = r.WithContext(ctx)
+				dumpB, _ := httputil.DumpRequest(r, true)
+				fmt.Println("=======dumpB===========")
+				fmt.Println(string(dumpB))
 			},
 		}
 		proxy.ServeHTTP(c.Writer, c.Request)
