@@ -60,12 +60,12 @@ func (v *Validator) Validate(k *key.ResponseKey, promptCost float64) error {
 		return internal_errors.NewExpirationError("api key expired", internal_errors.TtlExpiration)
 	}
 
-	err := v.validateRequestsLimit(k.KeyId, k.RequestsLimit)
-	if err != nil {
-		return err
-	}
+	//err := v.validateRequestsLimit(k.KeyId, k.RequestsLimit)
+	//if err != nil {
+	//	return err
+	//}
 
-	err = v.validateRateLimitOverTime(k.KeyId, k.RateLimitOverTime, k.RateLimitUnit)
+	err := v.validateRateLimitOverTime(k.KeyId, k.RateLimitOverTime, k.RateLimitUnit)
 	if err != nil {
 		return err
 	}
