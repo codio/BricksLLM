@@ -62,6 +62,10 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 			return
 		}
 		dumpA, _ := httputil.DumpRequest(c.Request, true)
+		c.Request.Header.Del("X-Amzn-Trace-Id")
+		c.Request.Header.Del("X-Forwarded-For")
+		c.Request.Header.Del("X-Forwarded-Port")
+		c.Request.Header.Del("X-Forwarded-Proto")
 		fmt.Println("=======dumpA===========")
 		fmt.Println(string(dumpA))
 		proxy := &httputil.ReverseProxy{
