@@ -25,6 +25,7 @@ type UpdateKey struct {
 	CostLimitInUsdUnit     *TimeUnit     `json:"costLimitInUsdUnit"`
 	RateLimitOverTime      *int          `json:"rateLimitOverTime"`
 	RateLimitUnit          *TimeUnit     `json:"rateLimitUnit"`
+	RequestsLimit          *int          `json:"requestsLimit"`
 	AllowedPaths           *[]PathConfig `json:"allowedPaths,omitempty"`
 	ShouldLogRequest       *bool         `json:"shouldLogRequest"`
 	ShouldLogResponse      *bool         `json:"shouldLogResponse"`
@@ -49,6 +50,10 @@ func (uk *UpdateKey) Validate() error {
 
 	if uk.CostLimitInUsd != nil && *uk.CostLimitInUsd < 0 {
 		invalid = append(invalid, "costLimitInUsd")
+	}
+
+	if uk.RequestsLimit != nil && *uk.RequestsLimit < 0 {
+		invalid = append(invalid, "requestsLimit")
 	}
 
 	if uk.UpdatedAt <= 0 {

@@ -98,7 +98,7 @@ func (a *Authenticator) getApiKeyByXCustomProvider(req *http.Request, xCustomPro
 		err = internal_errors.NewAuthError("provider settings error")
 		return
 	}
-	header := req.Header.Get(xCustomSetting.AuthHeader)
+	header := req.Header.Get(xCustomSetting.AuthLocation)
 	key, err = xcustom.ExtractBricksKey(header, xCustomSetting.AuthTemplate)
 	if err != nil {
 		err = internal_errors.NewAuthError("provider settings error")

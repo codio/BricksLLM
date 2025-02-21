@@ -301,7 +301,7 @@ func main() {
 	}
 	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage, requestsLimitStorage)
 
-	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache)
+	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache, requestsLimitStorage)
 	krm := manager.NewReportingManager(costStorage, store, store, v)
 	psm := manager.NewProviderSettingsManager(store, psCache, encryptor)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)

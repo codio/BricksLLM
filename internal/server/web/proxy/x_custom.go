@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/bricks-cloud/bricksllm/internal/provider"
@@ -24,8 +25,8 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 			return
 		}
 
-		//ctx, cancel := context.WithTimeout(context.Background(), c.GetDuration("requestTimeout"))
-		//defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), c.GetDuration("requestTimeout"))
+		defer cancel()
 
 		providerId := c.Param(xcustom.XProviderIdParam)
 		rawProviderSettings, exists := c.Get("settings")
@@ -60,38 +61,16 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, "[BricksLLM] invalid endpoint")
 			return
 		}
-		dumpA, _ := httputil.DumpRequest(c.Request, true)
 		c.Request.Header.Del("X-Amzn-Trace-Id")
 		c.Request.Header.Del("X-Forwarded-For")
 		c.Request.Header.Del("X-Forwarded-Port")
 		c.Request.Header.Del("X-Forwarded-Proto")
-		fmt.Println("=========HEADERS3==============")
-		fmt.Println(c.Request.Header)
-		fmt.Println("=======dumpA===========")
-		fmt.Println(string(dumpA))
-		//proxy := &httputil.ReverseProxy{
-		//	Director: func(r *http.Request) {
-		//		r.URL.Scheme = target.Scheme
-		//		r.URL.Host = target.Host
-		//		r.URL.Path, r.URL.RawPath = target.Path, target.RawPath
-		//		r.RequestURI = target.RequestURI()
-		//		r.Host = target.Host
-		//		r = r.WithContext(ctx)
-		//
-		//		r.Header.Del("X-Amzn-Trace-Id")
-		//		r.Header.Del("X-Forwarded-For")
-		//		r.Header.Del("X-Forwarded-Port")
-		//		r.Header.Del("X-Forwarded-Proto")
-		//
-		//		dumpB, _ := httputil.DumpRequest(r, true)
-		//		fmt.Println("=======dumpB===========")
-		//		fmt.Println(string(dumpB))
-		//	},
-		//}
+
 		proxy := &httputil.ReverseProxy{
 			Rewrite: func(r *httputil.ProxyRequest) {
 				r.SetURL(target)
 				r.Out.URL.Path, r.Out.URL.RawPath = target.Path, target.RawPath
+				r.Out.WithContext(ctx)
 			},
 		}
 		proxy.ServeHTTP(c.Writer, c.Request)

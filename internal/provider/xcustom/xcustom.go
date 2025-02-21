@@ -10,7 +10,7 @@ import (
 type XCustomSettings struct {
 	Apikey       string `json:"apikey"`
 	Endpoint     string `json:"endpoint"`
-	AuthHeader   string `json:"authHeader"`
+	AuthLocation string `json:"authLocation"`
 	AuthTemplate string `json:"authTemplate"`
 }
 

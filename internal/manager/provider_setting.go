@@ -111,9 +111,9 @@ func findMissingAuthParams(providerName string, params map[string]string) string
 		if len(val) == 0 {
 			missingFields = append(missingFields, "endpoint")
 		}
-		val = params["authHeader"]
+		val = params["authLocation"]
 		if len(val) == 0 {
-			missingFields = append(missingFields, "authHeader")
+			missingFields = append(missingFields, "authLocation")
 		}
 		val = params["authTemplate"]
 		if !strings.Contains(val, "{{apikey}}") {

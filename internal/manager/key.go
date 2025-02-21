@@ -46,21 +46,27 @@ type keyCache interface {
 	Get(keyId string) (*key.ResponseKey, error)
 }
 
-type Manager struct {
-	s   Storage
-	clc costLimitCache
-	rlc rateLimitCache
-	ac  accessCache
-	kc  keyCache
+type requestsLimitStorage interface {
+	DeleteCounter(keyId string) error
 }
 
-func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache) *Manager {
+type Manager struct {
+	s    Storage
+	clc  costLimitCache
+	rlc  rateLimitCache
+	ac   accessCache
+	kc   keyCache
+	rqls requestsLimitStorage
+}
+
+func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache, rqls requestsLimitStorage) *Manager {
 	return &Manager{
-		s:   s,
-		clc: clc,
-		rlc: rlc,
-		ac:  ac,
-		kc:  kc,
+		s:    s,
+		clc:  clc,
+		rlc:  rlc,
+		ac:   ac,
+		kc:   kc,
+		rqls: rqls,
 	}
 }
 
@@ -171,6 +177,12 @@ func (m *Manager) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, err
 
 	if uk.CostLimitInUsdUnit != nil || uk.RateLimitUnit != nil {
 		err := m.ac.Delete(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if uk.RequestsLimit != nil {
+		err := m.rqls.DeleteCounter(id)
 		if err != nil {
 			return nil, err
 		}
