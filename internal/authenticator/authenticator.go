@@ -81,12 +81,7 @@ func getApiKey(req *http.Request) (string, error) {
 	return "", internal_errors.NewAuthError("api key not found in header")
 }
 
-func (a *Authenticator) getApiKeyByXCustomProvider(req *http.Request, xCustomProviderId string) (key string, pSettings []*provider.Setting, err error) {
-	providerSetting, err := a.psm.GetSettingViaCache(xCustomProviderId)
-	if err != nil {
-		return
-	}
-	pSettings = []*provider.Setting{providerSetting}
+func getXCustomAuth(req *http.Request, providerSetting *provider.Setting) (key *xcustom.XCustomAuth, pSettings []*provider.Setting, err error) {
 	setting := providerSetting.Setting
 	if setting == nil {
 		err = internal_errors.NewAuthError("provider settings not found")
@@ -98,8 +93,7 @@ func (a *Authenticator) getApiKeyByXCustomProvider(req *http.Request, xCustomPro
 		err = internal_errors.NewAuthError("provider settings error")
 		return
 	}
-	header := req.Header.Get(xCustomSetting.AuthLocation)
-	key, err = xcustom.ExtractBricksKey(header, xCustomSetting.AuthTemplate)
+	key, err = xcustom.GetXCustomAuth(req, xCustomSetting)
 	if err != nil {
 		err = internal_errors.NewAuthError("provider settings error")
 		return
@@ -236,8 +230,18 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	var raw string
 	var err error
 	var settings []*provider.Setting
+	var xCustomAuth *xcustom.XCustomAuth
 	if xcustom.IsXCustomRequest(req) {
-		raw, settings, err = a.getApiKeyByXCustomProvider(req, xCustomProviderId)
+		providerSetting, er := a.psm.GetSettingViaCache(xCustomProviderId)
+		if er != nil {
+			return nil, nil, er
+		}
+		settings = []*provider.Setting{providerSetting}
+		xCustomAuth, settings, err = getXCustomAuth(req, providerSetting)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw = xCustomAuth.Apikey
 	} else {
 		raw, err = getApiKey(req)
 	}
@@ -274,9 +278,18 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	}
 
 	if xcustom.IsXCustomRequest(req) {
-		authHeaderK := settings[0].GetParam("authHeader")
-		authHeaderV := strings.Replace(settings[0].GetParam("authTemplate"), "{{apikey}}", settings[0].GetParam("apikey"), -1)
-		req.Header.Set(authHeaderK, authHeaderV)
+		if xCustomAuth == nil {
+			return nil, nil, errors.New("xCustomAuth invalid")
+		}
+		authString := strings.Replace(xCustomAuth.Mask, "{{apikey}}", settings[0].GetParam("apikey"), -1)
+		switch xCustomAuth.Location {
+		case xcustom.AuthLocations.Query:
+			req.URL.Query().Set(xCustomAuth.Target, authString)
+		case xcustom.AuthLocations.Header:
+			req.Header.Set(xCustomAuth.Target, authString)
+		default:
+			return nil, nil, errors.New("invalid xCustomAuth location")
+		}
 		return key, settings, nil
 	}
 
