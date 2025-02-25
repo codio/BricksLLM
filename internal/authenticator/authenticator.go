@@ -262,7 +262,9 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 		target := pSetting.GetParam(xcustom.XCustomSettingFields.AuthTarget)
 		switch location {
 		case xcustom.AuthLocations.Query:
-			req.URL.Query().Set(target, authString)
+			params := req.URL.Query()
+			params.Set(target, authString)
+			req.URL.RawQuery = params.Encode()
 		case xcustom.AuthLocations.Header:
 			req.Header.Set(target, authString)
 		default:
