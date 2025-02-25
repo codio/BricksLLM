@@ -61,10 +61,6 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, "[BricksLLM] invalid endpoint")
 			return
 		}
-		c.Request.Header.Del("X-Amzn-Trace-Id")
-		c.Request.Header.Del("X-Forwarded-For")
-		c.Request.Header.Del("X-Forwarded-Port")
-		c.Request.Header.Del("X-Forwarded-Proto")
 
 		proxy := &httputil.ReverseProxy{
 			Rewrite: func(r *httputil.ProxyRequest) {

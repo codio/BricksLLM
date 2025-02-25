@@ -3,6 +3,7 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"slices"
 	"strconv"
 	"strings"
@@ -182,6 +183,18 @@ func (m *ProviderSettingsManager) CreateSetting(setting *provider.Setting) (*pro
 	setting.CreatedAt = time.Now().Unix()
 	setting.UpdatedAt = time.Now().Unix()
 
+	if setting.Provider == "xCustom" {
+		advancedSetting, err := xcustom.AdvancedXCustomSetting(setting.Setting)
+		if err != nil {
+			return nil, err
+		}
+		merged := setting.Setting
+		for k, v := range advancedSetting {
+			merged[k] = v
+		}
+		setting.Setting = merged
+	}
+
 	if m.Encryptor.Enabled() {
 		params, err := m.EncryptParams(setting.UpdatedAt, setting.Provider, setting.Setting)
 		if err != nil {
@@ -212,6 +225,16 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 		merged := existing.Setting
 		for k, v := range setting.Setting {
 			merged[k] = v
+		}
+
+		if existing.Provider == "xCustom" {
+			advancedSetting, err := xcustom.AdvancedXCustomSetting(setting.Setting)
+			if err != nil {
+				return nil, err
+			}
+			for k, v := range advancedSetting {
+				merged[k] = v
+			}
 		}
 
 		setting.Setting = merged

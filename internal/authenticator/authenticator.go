@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
-	"github.com/go-viper/mapstructure/v2"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -79,26 +78,6 @@ func getApiKey(req *http.Request) (string, error) {
 	}
 
 	return "", internal_errors.NewAuthError("api key not found in header")
-}
-
-func getXCustomAuth(req *http.Request, providerSetting *provider.Setting) (key *xcustom.XCustomAuth, pSettings []*provider.Setting, err error) {
-	setting := providerSetting.Setting
-	if setting == nil {
-		err = internal_errors.NewAuthError("provider settings not found")
-		return
-	}
-	var xCustomSetting *xcustom.XCustomSettings
-	err = mapstructure.Decode(setting, &xCustomSetting)
-	if err != nil {
-		err = internal_errors.NewAuthError("provider settings error")
-		return
-	}
-	key, err = xcustom.GetXCustomAuth(req, xCustomSetting)
-	if err != nil {
-		err = internal_errors.NewAuthError("provider settings error")
-		return
-	}
-	return
 }
 
 func rewriteHttpAuthHeader(req *http.Request, setting *provider.Setting) error {
@@ -230,18 +209,13 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	var raw string
 	var err error
 	var settings []*provider.Setting
-	var xCustomAuth *xcustom.XCustomAuth
 	if xcustom.IsXCustomRequest(req) {
 		providerSetting, er := a.psm.GetSettingViaCache(xCustomProviderId)
 		if er != nil {
 			return nil, nil, er
 		}
 		settings = []*provider.Setting{providerSetting}
-		xCustomAuth, settings, err = getXCustomAuth(req, providerSetting)
-		if err != nil {
-			return nil, nil, err
-		}
-		raw = xCustomAuth.Apikey
+		raw, err = xcustom.ExtractApiKey(req, providerSetting)
 	} else {
 		raw, err = getApiKey(req)
 	}
@@ -278,15 +252,19 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	}
 
 	if xcustom.IsXCustomRequest(req) {
-		if xCustomAuth == nil {
-			return nil, nil, errors.New("xCustomAuth invalid")
-		}
-		authString := strings.Replace(xCustomAuth.Mask, "{{apikey}}", settings[0].GetParam("apikey"), -1)
-		switch xCustomAuth.Location {
+		pSetting := settings[0]
+		authString := strings.Replace(
+			pSetting.GetParam(xcustom.XCustomSettingFields.AuthMask),
+			"{{apikey}}",
+			pSetting.GetParam(xcustom.XCustomSettingFields.ApiKey), -1,
+		)
+		location := xcustom.GetAuthLocation(pSetting.GetParam(xcustom.XCustomSettingFields.AuthLocation))
+		target := pSetting.GetParam(xcustom.XCustomSettingFields.AuthTarget)
+		switch location {
 		case xcustom.AuthLocations.Query:
-			req.URL.Query().Set(xCustomAuth.Target, authString)
+			req.URL.Query().Set(target, authString)
 		case xcustom.AuthLocations.Header:
-			req.Header.Set(xCustomAuth.Target, authString)
+			req.Header.Set(target, authString)
 		default:
 			return nil, nil, errors.New("invalid xCustomAuth location")
 		}
