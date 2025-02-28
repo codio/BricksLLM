@@ -218,25 +218,10 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 	}
 
 	if len(setting.Setting) != 0 {
-		if err := m.validateSettings(existing.Provider, setting.Setting); err != nil {
+		merged, err := m.getMergedSettings(existing, setting.Setting)
+		if err != nil {
 			return nil, err
 		}
-
-		merged := existing.Setting
-		for k, v := range setting.Setting {
-			merged[k] = v
-		}
-
-		if existing.Provider == "xCustom" {
-			advancedSetting, err := xcustom.AdvancedXCustomSetting(setting.Setting)
-			if err != nil {
-				return nil, err
-			}
-			for k, v := range advancedSetting {
-				merged[k] = v
-			}
-		}
-
 		setting.Setting = merged
 	}
 
@@ -257,6 +242,31 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 	}
 
 	return m.Storage.UpdateProviderSetting(id, setting)
+}
+
+func (m *ProviderSettingsManager) getMergedSettings(existing *provider.Setting, setting map[string]string) (map[string]string, error) {
+	merged := existing.Setting
+	apikey, ok := setting["apikey"]
+	if ok && apikey == "revoked" {
+		merged["apikey"] = apikey
+		return merged, nil
+	}
+	if err := m.validateSettings(existing.Provider, setting); err != nil {
+		return nil, err
+	}
+	for k, v := range setting {
+		merged[k] = v
+	}
+	if existing.Provider == "xCustom" {
+		advancedSetting, err := xcustom.AdvancedXCustomSetting(setting)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range advancedSetting {
+			merged[k] = v
+		}
+	}
+	return merged, nil
 }
 
 func (m *ProviderSettingsManager) GetSettingViaCache(id string) (*provider.Setting, error) {
