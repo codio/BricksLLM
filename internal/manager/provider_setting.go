@@ -251,9 +251,6 @@ func (m *ProviderSettingsManager) getMergedSettings(existing *provider.Setting, 
 		merged["apikey"] = apikey
 		return merged, nil
 	}
-	if err := m.validateSettings(existing.Provider, setting); err != nil {
-		return nil, err
-	}
 	for k, v := range setting {
 		merged[k] = v
 	}
@@ -265,6 +262,9 @@ func (m *ProviderSettingsManager) getMergedSettings(existing *provider.Setting, 
 		for k, v := range advancedSetting {
 			merged[k] = v
 		}
+	}
+	if err := m.validateSettings(existing.Provider, merged); err != nil {
+		return nil, err
 	}
 	return merged, nil
 }
