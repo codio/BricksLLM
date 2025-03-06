@@ -1,8 +1,9 @@
 package errors
 
 const (
-	TtlExpiration       string = "ttl"
-	CostLimitExpiration string = "cost-limit"
+	TtlExpiration           string = "ttl"
+	CostLimitExpiration     string = "cost-limit"
+	RequestsLimitExpiration string = "requests-limit"
 )
 
 type ExpirationError struct {

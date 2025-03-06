@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"io"
 	"net/http"
 	"strconv"
@@ -23,6 +24,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 
 	goopenai "github.com/sashabaranov/go-openai"
@@ -66,7 +68,7 @@ type deepinfraEstimator interface {
 }
 
 type authenticator interface {
-	AuthenticateHttpRequest(req *http.Request) (*key.ResponseKey, []*provider.Setting, error)
+	AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error)
 }
 
 type validator interface {
@@ -303,7 +305,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			return
 		}
 
-		kc, settings, err := a.AuthenticateHttpRequest(c.Request)
+		kc, settings, err := a.AuthenticateHttpRequest(c.Request, c.Param(xcustom.XProviderIdParam))
 		enrichedEvent.Key = kc
 		_, ok := err.(notAuthorizedError)
 		if ok {
@@ -345,6 +347,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			if strings.HasPrefix(c.FullPath(), "/api/providers/azure/openai") {
 				if selected != nil && len(selected.Setting["resourceName"]) != 0 {
 					c.Set("resourceName", selected.Setting["resourceName"])
+				}
+			}
+
+			if strings.HasPrefix(c.FullPath(), "/api/providers/bedrock/anthropic") {
+				if selected != nil && len(selected.Setting["awsAccessKeyId"]) != 0 {
+					c.Set("awsAccessKeyId", selected.Setting["awsAccessKeyId"])
+				}
+
+				if selected != nil && len(selected.Setting["awsSecretAccessKey"]) != 0 {
+					c.Set("awsSecretAccessKey", selected.Setting["awsSecretAccessKey"])
+				}
+
+				if selected != nil && len(selected.Setting["awsRegion"]) != 0 {
+					c.Set("awsRegion", selected.Setting["awsRegion"])
 				}
 			}
 
@@ -400,6 +416,54 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("model", cr.Model)
 
 			policyInput = cr
+		}
+
+		if c.FullPath() == "/api/providers/bedrock/anthropic/v1/complete" {
+			logCompletionRequest(logWithCid, body, prod, private)
+
+			cr := &anthropic.CompletionRequest{}
+			err = json.Unmarshal(body, cr)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling bedrock anthropic completion request", prod, err)
+				return
+			}
+
+			if cr.Metadata != nil {
+				userId = cr.Metadata.UserId
+			}
+
+			enrichedEvent.Request = cr
+
+			if cr.Stream {
+				c.Set("stream", cr.Stream)
+			}
+
+			c.Set("model", cr.Model)
+
+			policyInput = cr
+		}
+
+		if c.FullPath() == "/api/providers/bedrock/anthropic/v1/messages" {
+			logCreateMessageRequest(logWithCid, body, prod, private)
+
+			mr := &anthropic.MessagesRequest{}
+			err = json.Unmarshal(body, mr)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling anthropic messages request", prod, err)
+				return
+			}
+
+			if mr.Metadata != nil {
+				userId = mr.Metadata.UserId
+			}
+
+			if mr.Stream {
+				c.Set("stream", mr.Stream)
+			}
+
+			c.Set("model", mr.Model)
+
+			policyInput = mr
 		}
 
 		if c.FullPath() == "/api/providers/anthropic/v1/messages" {
@@ -701,7 +765,13 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 		if c.FullPath() == "/api/providers/openai/v1/chat/completions" {
 			ccr := &goopenai.ChatCompletionRequest{}
-			err = json.Unmarshal(body, ccr)
+			// this is a hack around an open issue in go-openai.
+			// https://github.com/sashabaranov/go-openai/issues/884
+			cleaned, err := sjson.Delete(string(body), "response_format.json_schema")
+			if err != nil {
+				logWithCid.Warn("removing response_format.json_schema", zap.Error(err))
+			}
+			err = json.Unmarshal([]byte(cleaned), ccr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling chat completion request", prod, err)
 				return

@@ -18,6 +18,7 @@ type recorder interface {
 	RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit) error
 	RecordUserSpend(userId string, micros int64, costLimitUnit key.TimeUnit) error
 	RecordEvent(e *event.Event) error
+	RecordKeyRequestSpent(keyId string) error
 }
 
 func NewConsumer(mc <-chan Message, log *zap.Logger, num int, handle func(Message) error) *Consumer {

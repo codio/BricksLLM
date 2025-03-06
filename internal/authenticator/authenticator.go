@@ -3,8 +3,10 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
@@ -34,19 +36,26 @@ type keyStorage interface {
 	GetKeyByHash(hash string) (*key.ResponseKey, error)
 }
 
-type Authenticator struct {
-	psm providerSettingsManager
-	kc  keysCache
-	rm  routesManager
-	ks  keyStorage
+type Decryptor interface {
+	Decrypt(input string, headers map[string]string) (string, error)
+	Enabled() bool
 }
 
-func NewAuthenticator(psm providerSettingsManager, kc keysCache, rm routesManager, ks keyStorage) *Authenticator {
+type Authenticator struct {
+	psm       providerSettingsManager
+	kc        keysCache
+	rm        routesManager
+	ks        keyStorage
+	decryptor Decryptor
+}
+
+func NewAuthenticator(psm providerSettingsManager, kc keysCache, rm routesManager, ks keyStorage, decryptor Decryptor) *Authenticator {
 	return &Authenticator{
-		psm: psm,
-		kc:  kc,
-		rm:  rm,
-		ks:  ks,
+		psm:       psm,
+		kc:        kc,
+		rm:        rm,
+		ks:        ks,
+		decryptor: decryptor,
 	}
 }
 
@@ -87,6 +96,10 @@ func rewriteHttpAuthHeader(req *http.Request, setting *provider.Setting) error {
 	}
 
 	if len(apiKey) == 0 {
+		if setting.Provider == "bedrock" {
+			return nil
+		}
+
 		return errors.New("api key is empty in provider setting")
 	}
 
@@ -152,6 +165,10 @@ func (a *Authenticator) getProviderSettingsThatCanAccessCustomRoute(path string,
 }
 
 func canAccessPath(provider string, path string) bool {
+	if provider == "bedrock" && !strings.HasPrefix(path, "/api/providers/bedrock") {
+		return false
+	}
+
 	if provider == "openai" && !strings.HasPrefix(path, "/api/providers/openai") {
 		return false
 	}
@@ -188,8 +205,20 @@ func anonymize(input string) string {
 	return string(input[0:5]) + "**********************************************"
 }
 
-func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.ResponseKey, []*provider.Setting, error) {
-	raw, err := getApiKey(req)
+func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error) {
+	var raw string
+	var err error
+	var settings []*provider.Setting
+	if xcustom.IsXCustomRequest(req) {
+		providerSetting, er := a.psm.GetSettingViaCache(xCustomProviderId)
+		if er != nil {
+			return nil, nil, er
+		}
+		settings = []*provider.Setting{providerSetting}
+		raw, err = xcustom.ExtractApiKey(req, providerSetting)
+	} else {
+		raw, err = getApiKey(req)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -220,6 +249,28 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.Respons
 
 	if key.Revoked {
 		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s has been revoked", anonymize(raw)))
+	}
+
+	if xcustom.IsXCustomRequest(req) {
+		pSetting := settings[0]
+		authString := strings.Replace(
+			pSetting.GetParam(xcustom.XCustomSettingFields.AuthMask),
+			"{{apikey}}",
+			pSetting.GetParam(xcustom.XCustomSettingFields.ApiKey), -1,
+		)
+		location := xcustom.GetAuthLocation(pSetting.GetParam(xcustom.XCustomSettingFields.AuthLocation))
+		target := pSetting.GetParam(xcustom.XCustomSettingFields.AuthTarget)
+		switch location {
+		case xcustom.AuthLocations.Query:
+			params := req.URL.Query()
+			params.Set(target, authString)
+			req.URL.RawQuery = params.Encode()
+		case xcustom.AuthLocations.Header:
+			req.Header.Set(target, authString)
+		default:
+			return nil, nil, errors.New("invalid xCustomAuth location")
+		}
+		return key, settings, nil
 	}
 
 	if strings.HasPrefix(req.URL.Path, "/api/routes") {
@@ -258,6 +309,26 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.Respons
 		used := selected[0]
 		if key.RotationEnabled {
 			used = selected[rand.Intn(len(selected))]
+		}
+
+		if a.decryptor.Enabled() {
+			encryptedParam := ""
+			if used.Provider == "amazon" {
+				encryptedParam = used.Setting["awsSecretAccessKey"]
+			} else if len(used.Setting["apikey"]) != 0 {
+				encryptedParam = used.Setting["apikey"]
+			}
+
+			if len(encryptedParam) != 0 {
+				decryptedSecret, err := a.decryptor.Decrypt(encryptedParam, map[string]string{"X-UPDATED-AT": strconv.FormatInt(used.UpdatedAt, 10)})
+				if err == nil {
+					if used.Provider == "amazon" {
+						used.Setting["awsSecretAccessKey"] = decryptedSecret
+					} else {
+						used.Setting["apikey"] = decryptedSecret
+					}
+				}
+			}
 		}
 
 		err := rewriteHttpAuthHeader(req, used)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,17 +14,19 @@ import (
 	"github.com/lib/pq"
 )
 
+var allowedTopBy = []string{"total_cost_in_usd", "total_requests"}
+
 func (s *Store) CreateEventsByDayTable() error {
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS event_agg_by_day (
 		id SERIAL PRIMARY KEY,
 		time_stamp BIGINT NOT NULL,
-		num_of_requests INT NOT NULL,
+		num_of_requests BIGINT NOT NULL,
 		cost_in_usd FLOAT8 NOT NULL,
-		latency_in_ms INT NOT NULL,
-		prompt_token_count INT NOT NULL,
-		success_count INT NOT NULL,
-		completion_token_count INT NOT NULL,
+		latency_in_ms BIGINT NOT NULL,
+		prompt_token_count BIGINT NOT NULL,
+		success_count BIGINT NOT NULL,
+		completion_token_count BIGINT NOT NULL,
 		key_id VARCHAR(255)
 	)`
 
@@ -471,7 +474,7 @@ func (s *Store) GetTopKeyDataPoints(start, end int64, tags, keyIds []string, ord
 	return data, nil
 }
 
-func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error) {
+func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error) {
 	args := []any{}
 	condition := ""
 	condition2 := ""
@@ -494,19 +497,10 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	}
 
 	if len(tags) > 0 {
-		condition2 += fmt.Sprintf("AND keys.tags @> $%d", index)
+		condition2 += fmt.Sprintf("AND events.tags @> $%d", index)
 
 		args = append(args, pq.Array(tags))
 		index++
-	}
-
-	if revoked != nil {
-		bools := "False"
-		if *revoked {
-			bools = "True"
-		}
-
-		condition2 += fmt.Sprintf(" AND keys.revoked = %s", bools)
 	}
 
 	query := fmt.Sprintf(`
@@ -517,7 +511,8 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 	(
 		SELECT 
 		key_ring,
-		SUM(cost_in_usd) AS total_cost_in_usd
+		SUM(cost_in_usd) AS total_cost_in_usd,
+		COUNT(*) AS total_requests
 		FROM events
 		LEFT JOIN keys
 		ON keys.key_id = events.key_id
@@ -531,9 +526,13 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 		qorder = "ASC"
 	}
 
+	qtopBy := "total_cost_in_usd"
+	if topBy != "" && slices.Contains(allowedTopBy, topBy) {
+		qtopBy = topBy
+	}
 	query += fmt.Sprintf(`
-	ORDER BY total_cost_in_usd %s 
-`, qorder)
+	ORDER BY %s %s 
+`, qtopBy, qorder)
 
 	if limit != 0 {
 		query += fmt.Sprintf(`
@@ -558,6 +557,7 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 		additional := []any{
 			&keyRing,
 			&e.CostInUsd,
+			&e.Requests,
 		}
 
 		if err := rows.Scan(
@@ -597,10 +597,14 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 		COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
 		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_day,
 		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_week,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month
+		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month,
+		COALESCE(SUM(1), 0) AS total_requests,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_day,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_week,
+		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_month
 	FROM events
 	WHERE %s
-	`, dayAgo, weekAgo, monthAgo, condition)
+	`, dayAgo, weekAgo, monthAgo, dayAgo, weekAgo, monthAgo, condition)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -611,6 +615,10 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 		&data.LastDayUsage,
 		&data.LastWeekUsage,
 		&data.LastMonthUsage,
+		&data.TotalUsageRequests,
+		&data.LastDayUsageRequests,
+		&data.LastWeekUsageRequests,
+		&data.LastMonthUsageRequests,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -620,7 +628,7 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 	return data, nil
 }
 
-func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error) {
+func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {
 		conditionBlock += fmt.Sprintf("AND key_id = ANY('%s')", sliceToSqlStringArray(keyIds))
@@ -644,9 +652,9 @@ func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []str
 	}
 	defer rows.Close()
 
-	data := []*event.DataPoint{}
+	data := []*event.DataPointV2{}
 	for rows.Next() {
-		var e event.DataPoint
+		var e event.DataPointV2
 		var keyId sql.NullString
 		var id sql.NullInt32
 

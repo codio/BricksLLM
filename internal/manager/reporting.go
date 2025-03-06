@@ -14,7 +14,7 @@ type costStorage interface {
 
 type keyStorage interface {
 	GetKey(keyId string) (*key.ResponseKey, error)
-	GetSpentKeyRings(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]string, error)
+	GetSpentKeys(tags []string, order string, limit, offset int, validator func(*key.ResponseKey) bool) ([]event.SpentKey, error)
 }
 
 type keyValidator interface {
@@ -26,12 +26,12 @@ type eventStorage interface {
 	GetEventsV2(req *event.EventRequest) (*event.EventResponse, error)
 	GetEventDataPoints(start, end, increment int64, tags, keyIds, customIds, userIds []string, filters []string) ([]*event.DataPoint, error)
 	GetLatencyPercentiles(start, end int64, tags, keyIds []string) ([]float64, error)
-	GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPoint, error)
+	GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error)
 	GetUserIds(keyId string) ([]string, error)
 	GetCustomIds(keyId string) ([]string, error)
 	GetTopKeyDataPoints(start, end int64, tags, keyIds []string, order string, limit, offset int, name string, revoked *bool) ([]*event.KeyDataPoint, error)
 
-	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool) ([]*event.KeyRingDataPoint, error)
+	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
 }
 
@@ -73,13 +73,13 @@ func (rm *ReportingManager) GetEventReporting(e *event.ReportingRequest) (*event
 	}, nil
 }
 
-func (rm *ReportingManager) GetAggregatedEventByDayReporting(e *event.ReportingRequest) (*event.ReportingResponse, error) {
+func (rm *ReportingManager) GetAggregatedEventByDayReporting(e *event.ReportingRequest) (*event.ReportingResponseV2, error) {
 	dataPoints, err := rm.es.GetAggregatedEventByDayDataPoints(e.Start, e.End, e.KeyIds)
 	if err != nil {
 		return nil, err
 	}
 
-	return &event.ReportingResponse{
+	return &event.ReportingResponseV2{
 		DataPoints: dataPoints,
 	}, nil
 }
@@ -130,7 +130,7 @@ func (rm *ReportingManager) GetTopKeyRingReporting(r *event.KeyRingReportingRequ
 		return nil, internal_errors.NewValidationError("key reporting request order can only be desc or asc")
 	}
 
-	dataPoints, err := rm.es.GetTopKeyRingDataPoints(r.Start, r.End, r.Tags, r.Order, r.Limit, r.Offset, r.Revoked)
+	dataPoints, err := rm.es.GetTopKeyRingDataPoints(r.Start, r.End, r.Tags, r.Order, r.Limit, r.Offset, r.Revoked, r.TopBy)
 	if err != nil {
 		return nil, err
 	}
@@ -160,12 +160,12 @@ func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingReque
 		return true
 	}
 
-	spentKeys, err := rm.ks.GetSpentKeyRings(r.Tags, r.Order, r.Limit, r.Offset, validator)
+	spentKeys, err := rm.ks.GetSpentKeys(r.Tags, r.Order, r.Limit, r.Offset, validator)
 	if err != nil {
 		return nil, err
 	}
 	return &event.SpentKeyReportingResponse{
-		KeyRings: spentKeys,
+		Keys: spentKeys,
 	}, nil
 }
 

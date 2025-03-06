@@ -13,6 +13,7 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-3-opus":     15,
 		"claude-3-sonnet":   3,
 		"claude-3.5-sonnet": 3,
+		"claude-3.5-haiku":  1,
 		"claude-3-haiku":    0.25,
 	},
 	"completion": {
@@ -21,6 +22,7 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-3-opus":     75,
 		"claude-3-sonnet":   15,
 		"claude-3.5-sonnet": 15,
+		"claude-3.5-haiku":  5,
 		"claude-3-haiku":    1.25,
 	},
 }
@@ -62,7 +64,13 @@ func (ce *CostEstimator) EstimatePromptCost(model string, tks int) (float64, err
 
 	}
 
-	selected := selectModel(model)
+	selected := ""
+	if strings.HasPrefix(model, "us") {
+		selected = convertAmazonModelToAnthropicModel(model)
+	} else {
+		selected = selectModel(model)
+	}
+
 	cost, ok := costMap[selected]
 	if !ok {
 		return 0, fmt.Errorf("%s is not present in the cost map provided", model)
@@ -77,8 +85,10 @@ func selectModel(model string) string {
 		return "claude-3-opus"
 	} else if strings.HasPrefix(model, "claude-3-sonnet") {
 		return "claude-3-sonnet"
-	} else if strings.HasPrefix(model, "claude-3.5-sonnet") {
+	} else if strings.HasPrefix(model, "claude-3.5-sonnet") || strings.HasPrefix(model, "claude-3-5-sonnet") {
 		return "claude-3.5-sonnet"
+	} else if strings.HasPrefix(model, "claude-3.5-haiku") || strings.HasPrefix(model, "claude-3-5-haiku") {
+		return "claude-3.5-haiku"
 	} else if strings.HasPrefix(model, "claude-3-haiku") {
 		return "claude-3-haiku"
 	} else if strings.HasPrefix(model, "claude-instant") {
@@ -90,13 +100,28 @@ func selectModel(model string) string {
 	return ""
 }
 
+func convertAmazonModelToAnthropicModel(model string) string {
+	parts := strings.Split(model, ".")
+	if len(parts) < 3 {
+		return model
+	}
+
+	return selectModel(parts[2])
+}
+
 func (ce *CostEstimator) EstimateCompletionCost(model string, tks int) (float64, error) {
 	costMap, ok := ce.tokenCostMap["completion"]
 	if !ok {
 		return 0, errors.New("prompt token cost is not provided")
 	}
 
-	selected := selectModel(model)
+	selected := ""
+	if strings.HasPrefix(model, "us") {
+		selected = convertAmazonModelToAnthropicModel(model)
+	} else {
+		selected = selectModel(model)
+	}
+
 	cost, ok := costMap[selected]
 	if !ok {
 		return 0, errors.New("model is not present in the cost map provided")

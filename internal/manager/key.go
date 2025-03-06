@@ -46,21 +46,27 @@ type keyCache interface {
 	Get(keyId string) (*key.ResponseKey, error)
 }
 
-type Manager struct {
-	s   Storage
-	clc costLimitCache
-	rlc rateLimitCache
-	ac  accessCache
-	kc  keyCache
+type requestsLimitStorage interface {
+	DeleteCounter(keyId string) error
 }
 
-func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache) *Manager {
+type Manager struct {
+	s    Storage
+	clc  costLimitCache
+	rlc  rateLimitCache
+	ac   accessCache
+	kc   keyCache
+	rqls requestsLimitStorage
+}
+
+func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache, rqls requestsLimitStorage) *Manager {
 	return &Manager{
-		s:   s,
-		clc: clc,
-		rlc: rlc,
-		ac:  ac,
-		kc:  kc,
+		s:    s,
+		clc:  clc,
+		rlc:  rlc,
+		ac:   ac,
+		kc:   kc,
+		rqls: rqls,
 	}
 }
 
@@ -175,6 +181,12 @@ func (m *Manager) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, err
 			return nil, err
 		}
 	}
+	if uk.RequestsLimit != nil {
+		err := m.rqls.DeleteCounter(id)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if uk.PolicyId != nil {
 		if len(*uk.PolicyId) != 0 {
@@ -214,12 +226,16 @@ func (m *Manager) GetKeyViaCache(raw string) (*key.ResponseKey, error) {
 			return stored, nil
 		}
 
-		err = m.kc.Set(raw, bs, time.Hour)
+		err = m.kc.Set(raw, bs, 24*time.Hour)
 		if err != nil {
 			telemetry.Incr("bricksllm.manager.get_key_via_cache.set_error", nil, 1)
 		}
 
 		k = stored
+	}
+
+	if k != nil {
+		telemetry.Incr("bricksllm.manager.get_key_via_cache.cache_hit", nil, 1)
 	}
 
 	return k, nil

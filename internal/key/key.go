@@ -25,6 +25,7 @@ type UpdateKey struct {
 	CostLimitInUsdUnit     *TimeUnit     `json:"costLimitInUsdUnit"`
 	RateLimitOverTime      *int          `json:"rateLimitOverTime"`
 	RateLimitUnit          *TimeUnit     `json:"rateLimitUnit"`
+	RequestsLimit          *int          `json:"requestsLimit"`
 	AllowedPaths           *[]PathConfig `json:"allowedPaths,omitempty"`
 	ShouldLogRequest       *bool         `json:"shouldLogRequest"`
 	ShouldLogResponse      *bool         `json:"shouldLogResponse"`
@@ -49,6 +50,10 @@ func (uk *UpdateKey) Validate() error {
 
 	if uk.CostLimitInUsd != nil && *uk.CostLimitInUsd < 0 {
 		invalid = append(invalid, "costLimitInUsd")
+	}
+
+	if uk.RequestsLimit != nil && *uk.RequestsLimit < 0 {
+		invalid = append(invalid, "requestsLimit")
 	}
 
 	if uk.UpdatedAt <= 0 {
@@ -173,6 +178,7 @@ type RequestKey struct {
 	RotationEnabled        bool         `json:"rotationEnabled"`
 	PolicyId               string       `json:"policyId"`
 	IsKeyNotHashed         bool         `json:"isKeyNotHashed"`
+	RequestsLimit          int          `json:"requestsLimit"`
 }
 
 func (rk *RequestKey) Validate() error {
@@ -235,6 +241,10 @@ func (rk *RequestKey) Validate() error {
 
 	if rk.RateLimitOverTime < 0 {
 		invalid = append(invalid, "rateLimitOverTime")
+	}
+
+	if rk.RequestsLimit < 0 {
+		invalid = append(invalid, "requestsLimit")
 	}
 
 	if len(rk.Ttl) != 0 {
@@ -317,6 +327,7 @@ type ResponseKey struct {
 	CostLimitInUsdUnit     TimeUnit     `json:"costLimitInUsdUnit"`
 	RateLimitOverTime      int          `json:"rateLimitOverTime"`
 	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
+	RequestsLimit          int          `json:"requestsLimit"`
 	Ttl                    string       `json:"ttl"`
 	KeyRing                string       `json:"keyRing"`
 	SettingId              string       `json:"settingId"`
