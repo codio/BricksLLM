@@ -272,6 +272,14 @@ func main() {
 		log.Sugar().Fatalf("error connecting to keys redis storage: %v", err)
 	}
 
+	requestsLimitRedisStorage := redis.NewClient(defaultRedisOption(cfg, 11))
+
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := requestsLimitRedisStorage.Ping(ctx).Err(); err != nil {
+		log.Sugar().Fatalf("error connecting to requests limit redis storage: %v", err)
+	}
+
 	rateLimitCache := redisStorage.NewCache(rateLimitRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	costLimitCache := redisStorage.NewCache(costLimitRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	costStorage := redisStorage.NewStore(costRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
@@ -285,15 +293,15 @@ func main() {
 
 	psCache := redisStorage.NewProviderSettingsCache(providerSettingsRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	keysCache := redisStorage.NewKeysCache(keysRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
+	requestsLimitStorage := redisStorage.NewStore(requestsLimitRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
 	encryptor, err := encryptor.NewEncryptor(cfg.DecryptionEndpoint, cfg.EncryptionEndpoint, cfg.EnableEncrytion, cfg.EncryptionTimeout, cfg.Audience)
 	if cfg.EnableEncrytion && err != nil {
 		log.Sugar().Fatalf("error creating encryption client: %v", err)
 	}
-	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage)
+	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage, requestsLimitStorage)
 
-
-	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache)
+	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache, requestsLimitStorage)
 	krm := manager.NewReportingManager(costStorage, store, store, v)
 	psm := manager.NewProviderSettingsManager(store, psCache, encryptor)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
@@ -330,7 +338,7 @@ func main() {
 
 	uv := validator.NewUserValidator(userCostLimitCache, userRateLimitCache, userCostStorage)
 
-	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store)
+	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store, requestsLimitStorage)
 	rlm := manager.NewRateLimitManager(rateLimitCache, userRateLimitCache)
 	a := auth.NewAuthenticator(psm, m, rm, store, encryptor)
 

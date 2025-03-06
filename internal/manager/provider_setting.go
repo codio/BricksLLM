@@ -3,6 +3,8 @@ package manager
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +41,8 @@ type ProviderSettingsManager struct {
 	Encryptor Encryptor
 }
 
+var nativelySupportedProviders = []string{"openai", "anthropic", "azure", "vllm", "deepinfra", "bedrock", "xCustom"}
+
 func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSettingsCache, encryptor Encryptor) *ProviderSettingsManager {
 	return &ProviderSettingsManager{
 		Storage:   s,
@@ -48,7 +52,7 @@ func NewProviderSettingsManager(s ProviderSettingsStorage, cache ProviderSetting
 }
 
 func isProviderNativelySupported(provider string) bool {
-	return provider == "openai" || provider == "anthropic" || provider == "azure" || provider == "vllm" || provider == "deepinfra" || provider == "bedrock"
+	return slices.Contains(nativelySupportedProviders, provider)
 }
 
 func findMissingAuthParams(providerName string, params map[string]string) string {
@@ -96,6 +100,25 @@ func findMissingAuthParams(providerName string, params map[string]string) string
 		val := params["url"]
 		if len(val) == 0 {
 			missingFields = append(missingFields, "url")
+		}
+	}
+
+	if providerName == "xCustom" {
+		val := params["apikey"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "apikey")
+		}
+		val = params["endpoint"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "endpoint")
+		}
+		val = params["authLocation"]
+		if len(val) == 0 {
+			missingFields = append(missingFields, "authLocation")
+		}
+		val = params["authTemplate"]
+		if !strings.Contains(val, "{{apikey}}") {
+			missingFields = append(missingFields, "authTemplate")
 		}
 	}
 
@@ -160,6 +183,18 @@ func (m *ProviderSettingsManager) CreateSetting(setting *provider.Setting) (*pro
 	setting.CreatedAt = time.Now().Unix()
 	setting.UpdatedAt = time.Now().Unix()
 
+	if setting.Provider == "xCustom" {
+		advancedSetting, err := xcustom.AdvancedXCustomSetting(setting.Setting)
+		if err != nil {
+			return nil, err
+		}
+		merged := setting.Setting
+		for k, v := range advancedSetting {
+			merged[k] = v
+		}
+		setting.Setting = merged
+	}
+
 	if m.Encryptor.Enabled() {
 		params, err := m.EncryptParams(setting.UpdatedAt, setting.Provider, setting.Setting)
 		if err != nil {
@@ -183,15 +218,10 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 	}
 
 	if len(setting.Setting) != 0 {
-		if err := m.validateSettings(existing.Provider, setting.Setting); err != nil {
+		merged, err := m.getMergedSettings(existing, setting.Setting)
+		if err != nil {
 			return nil, err
 		}
-
-		merged := existing.Setting
-		for k, v := range setting.Setting {
-			merged[k] = v
-		}
-
 		setting.Setting = merged
 	}
 
@@ -212,6 +242,31 @@ func (m *ProviderSettingsManager) UpdateSetting(id string, setting *provider.Upd
 	}
 
 	return m.Storage.UpdateProviderSetting(id, setting)
+}
+
+func (m *ProviderSettingsManager) getMergedSettings(existing *provider.Setting, setting map[string]string) (map[string]string, error) {
+	merged := existing.Setting
+	apikey, ok := setting["apikey"]
+	if ok && apikey == "revoked" {
+		merged["apikey"] = apikey
+		return merged, nil
+	}
+	for k, v := range setting {
+		merged[k] = v
+	}
+	if existing.Provider == "xCustom" {
+		advancedSetting, err := xcustom.AdvancedXCustomSetting(setting)
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range advancedSetting {
+			merged[k] = v
+		}
+	}
+	if err := m.validateSettings(existing.Provider, merged); err != nil {
+		return nil, err
+	}
+	return merged, nil
 }
 
 func (m *ProviderSettingsManager) GetSettingViaCache(id string) (*provider.Setting, error) {

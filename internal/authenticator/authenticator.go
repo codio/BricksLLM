@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 	"fmt"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -204,8 +205,20 @@ func anonymize(input string) string {
 	return string(input[0:5]) + "**********************************************"
 }
 
-func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.ResponseKey, []*provider.Setting, error) {
-	raw, err := getApiKey(req)
+func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error) {
+	var raw string
+	var err error
+	var settings []*provider.Setting
+	if xcustom.IsXCustomRequest(req) {
+		providerSetting, er := a.psm.GetSettingViaCache(xCustomProviderId)
+		if er != nil {
+			return nil, nil, er
+		}
+		settings = []*provider.Setting{providerSetting}
+		raw, err = xcustom.ExtractApiKey(req, providerSetting)
+	} else {
+		raw, err = getApiKey(req)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -236,6 +249,28 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request) (*key.Respons
 
 	if key.Revoked {
 		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s has been revoked", anonymize(raw)))
+	}
+
+	if xcustom.IsXCustomRequest(req) {
+		pSetting := settings[0]
+		authString := strings.Replace(
+			pSetting.GetParam(xcustom.XCustomSettingFields.AuthMask),
+			"{{apikey}}",
+			pSetting.GetParam(xcustom.XCustomSettingFields.ApiKey), -1,
+		)
+		location := xcustom.GetAuthLocation(pSetting.GetParam(xcustom.XCustomSettingFields.AuthLocation))
+		target := pSetting.GetParam(xcustom.XCustomSettingFields.AuthTarget)
+		switch location {
+		case xcustom.AuthLocations.Query:
+			params := req.URL.Query()
+			params.Set(target, authString)
+			req.URL.RawQuery = params.Encode()
+		case xcustom.AuthLocations.Header:
+			req.Header.Set(target, authString)
+		default:
+			return nil, nil, errors.New("invalid xCustomAuth location")
+		}
+		return key, settings, nil
 	}
 
 	if strings.HasPrefix(req.URL.Path, "/api/routes") {
