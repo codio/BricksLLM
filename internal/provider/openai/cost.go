@@ -87,6 +87,13 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"finetune-babbage-002":        0.0016,
 		"finetune-davinci-002":        0.012,
 	},
+	"cached-prompt": {
+		"gpt-5":             0.000125,
+		"gpt-5-mini":        0.000025,
+		"gpt-5-nano":        0.000005,
+		"gpt-5-chat-latest": 0.000125,
+		"gpt-5-codex":       0.000125,
+	},
 	"finetune": {
 		"gpt-4-0613":         0.09,
 		"gpt-3.5-turbo-0125": 0.008,

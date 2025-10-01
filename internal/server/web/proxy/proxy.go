@@ -104,6 +104,11 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 	// completions
 	router.POST("/api/providers/openai/v1/chat/completions", getChatCompletionHandler(prod, private, client, e))
 
+	// responses
+	// https://api.openai.com/v1/responses
+	router.POST("/api/providers/openai/v1/responses", getResponsesHandler(prod, private, client, e))
+	router.POST("/api/providers/openai/v1/responses/*wildcard", getResponsesHandler(prod, private, client, e))
+
 	// embeddings
 	router.POST("/api/providers/openai/v1/embeddings", getEmbeddingHandler(prod, private, client, e))
 
