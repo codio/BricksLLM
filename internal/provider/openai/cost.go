@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bricks-cloud/bricksllm/internal/util"
+	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
 )
 
@@ -482,6 +483,42 @@ func (ce *CostEstimator) EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (f
 	}
 
 	return ce.EstimateEmbeddingsInputCost(string(r.Model), tks)
+}
+
+func (ce *CostEstimator) EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error) {
+	if len(model) == 0 {
+		return 0, errors.New("model is not provided")
+	}
+
+	inputTokens := usage.InputTokens
+	cachedInputTokens := usage.InputTokensDetails.CachedTokens
+	outputTokens := usage.OutputTokens
+
+	cachedInputCost, err := ce.estimateResponseApiTokensCost("cached-prompt", model, cachedInputTokens)
+	if err != nil {
+		cachedInputTokens = 0.0
+	}
+	inputCost, err := ce.estimateResponseApiTokensCost("prompt", model, inputTokens-cachedInputTokens)
+	if err != nil {
+		return 0.0, err
+	}
+
+	outputCost, err := ce.estimateResponseApiTokensCost("completion", model, outputTokens)
+
+	return math.Trunc((inputCost+outputCost+cachedInputCost)*100000) / 100000, err
+}
+
+func (ce *CostEstimator) estimateResponseApiTokensCost(costMapKey, model string, tks int64) (float64, error) {
+	costMap, ok := ce.tokenCostMap[costMapKey]
+	if !ok {
+		return 0, errors.New("cost map is not provided")
+	}
+	cost, ok := costMap[model]
+	if !ok {
+		return 0, fmt.Errorf("%s is not present in the cost map provided", model)
+	}
+	tksInFloat := float64(tks)
+	return tksInFloat / 1000 * cost, nil
 }
 
 func countFunctionTokens(model string, r *goopenai.ChatCompletionRequest, tc tokenCounter) (int, error) {

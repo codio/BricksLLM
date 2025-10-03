@@ -12,6 +12,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
 
+	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
 )
 
@@ -42,11 +43,11 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 
 		// TODO
 		isStreaming := c.GetBool("stream")
-		//if isStreaming {
-		//	req.Header.Set("Accept", "text/event-stream")
-		//	req.Header.Set("Cache-Control", "no-cache")
-		//	req.Header.Set("Connection", "keep-alive")
-		//}
+		if isStreaming {
+			req.Header.Set("Accept", "text/event-stream")
+			req.Header.Set("Cache-Control", "no-cache")
+			req.Header.Set("Connection", "keep-alive")
+		}
 
 		start := time.Now()
 		res, err := client.Do(req)
@@ -66,8 +67,47 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 			}
 		}
 
+		model := c.GetString("model")
+
 		if res.StatusCode == http.StatusOK && !isStreaming {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.proxy.get_responses_handler.latency", dur, nil, 1)
+
+			bytes, err := io.ReadAll(res.Body)
+			if err != nil {
+				logError(log, "error when reading openai http response api response body", prod, err)
+				JSON(c, http.StatusInternalServerError, "[BricksLLM] failed to read openai response body")
+				return
+			}
+
+			var cost float64 = 0
+			resp := &responsesOpenai.Response{}
+			telemetry.Incr("bricksllm.proxy.get_responses_handler.success", nil, 1)
+			telemetry.Timing("bricksllm.proxy.get_responses_handler.success_latency", dur, nil, 1)
+
+			err = json.Unmarshal(bytes, resp)
+			if err != nil {
+				logError(log, "error when unmarshalling openai http response api response body", prod, err)
+			}
 			//	TODO: implement non-streaming logic here
+
+			if err == nil {
+				// TODO log
+				//logChatCompletionResponse(log, prod, private, chatRes)
+				cost, err = e.EstimateResponseApiTotalCost(model, resp.Usage)
+				if err != nil {
+					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
+					logError(log, "error when estimating openai cost", prod, err)
+				}
+				//m, exists := c.Get("cost_map")
+			}
+
+			c.Set("costInUsd", cost)
+			c.Set("promptTokenCount", resp.Usage.InputTokens)
+			c.Set("completionTokenCount", resp.Usage.OutputTokens)
+
+			c.Data(res.StatusCode, "application/json", bytes)
+			return
 		}
 
 		if res.StatusCode != http.StatusOK {
@@ -94,7 +134,9 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 			return
 		}
 
+		// handle streaming response
+		telemetry.Incr("bricksllm.proxy.get_responses_handler.streaming_requests", nil, 1)
 		// TODO: implement the actual streaming logic here
-
+		telemetry.Timing("bricksllm.proxy.get_chat_completion_handler.streaming_latency", time.Since(start), nil, 1)
 	}
 }

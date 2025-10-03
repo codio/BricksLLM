@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
@@ -27,6 +28,7 @@ import (
 	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 
+	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
 )
 
@@ -52,6 +54,7 @@ type estimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
+	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
 }
 
 type azureEstimator interface {
@@ -790,6 +793,28 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 
 			policyInput = ccr
+		}
+
+		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/responses") {
+			responsesReq := &responsesOpenai.ResponseNewParams{}
+			err = json.Unmarshal(body, responsesReq)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling openai responses request", prod, err)
+				return
+			}
+
+			userId = responsesReq.User.String()
+			enrichedEvent.Request = responsesReq
+			c.Set("model", responsesReq.Model)
+
+			// TODO: log
+			//logRequest(logWithCid, prod, private, responsesReq)
+
+			if responsesReq.Metadata["stream"] == "true" {
+				c.Set("stream", true)
+			}
+
+			policyInput = responsesReq
 		}
 
 		if c.FullPath() == "/api/providers/openai/v1/embeddings" {
