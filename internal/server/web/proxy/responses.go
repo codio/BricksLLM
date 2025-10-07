@@ -43,7 +43,6 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 
 		copyHttpHeaders(c.Request, req, c.GetBool("removeUserAgent"))
 
-		// TODO
 		isStreaming := c.GetBool("stream")
 		if isStreaming {
 			req.Header.Set("Accept", "text/event-stream")
@@ -91,17 +90,14 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 			if err != nil {
 				logError(log, "error when unmarshalling openai http response api response body", prod, err)
 			}
-			//	TODO: implement non-streaming logic here
 
 			if err == nil {
-				// TODO log
-				//logChatCompletionResponse(log, prod, private, chatRes)
+				logResponsesResponse(log, prod, private, resp)
 				cost, err = e.EstimateResponseApiTotalCost(model, resp.Usage)
 				if err != nil {
 					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
 					logError(log, "error when estimating openai cost", prod, err)
 				}
-				//m, exists := c.Get("cost_map")
 			}
 
 			c.Set("costInUsd", cost)

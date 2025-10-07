@@ -809,8 +809,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			enrichedEvent.Request = responsesReq
 			c.Set("model", gopointer.ToValueOrDefault(responsesReq.Model, ""))
 
-			// TODO: log
-			//logRequest(logWithCid, prod, private, responsesReq)
+			logResponsesRequest(logWithCid, prod, private, responsesReq)
 
 			if gopointer.ToValueOrDefault(responsesReq.Stream, false) {
 				c.Set("stream", true)
