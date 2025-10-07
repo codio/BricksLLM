@@ -30,6 +30,8 @@ import (
 
 	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
+
+	"github.com/sergei-bronnikov/go-pointer"
 )
 
 type keyMemStorage interface {
@@ -796,21 +798,21 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/responses") {
-			responsesReq := &responsesOpenai.ResponseNewParams{}
+			responsesReq := &openai.ResponseRequest{}
 			err = json.Unmarshal(body, responsesReq)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling openai responses request", prod, err)
 				return
 			}
 
-			userId = responsesReq.User.String()
+			userId = gopointer.ToValueOrDefault(responsesReq.SafetyIdentifier, "")
 			enrichedEvent.Request = responsesReq
-			c.Set("model", responsesReq.Model)
+			c.Set("model", gopointer.ToValueOrDefault(responsesReq.Model, ""))
 
 			// TODO: log
 			//logRequest(logWithCid, prod, private, responsesReq)
 
-			if responsesReq.Metadata["stream"] == "true" {
+			if gopointer.ToValueOrDefault(responsesReq.Stream, false) {
 				c.Set("stream", true)
 			}
 

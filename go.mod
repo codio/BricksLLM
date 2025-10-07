@@ -22,6 +22,7 @@ require (
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/redis/go-redis/v9 v9.14.0
 	github.com/sashabaranov/go-openai v1.41.2
+	github.com/sergei-bronnikov/go-pointer v0.4.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5

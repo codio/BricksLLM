@@ -505,7 +505,7 @@ func (ce *CostEstimator) EstimateResponseApiTotalCost(model string, usage respon
 
 	outputCost, err := ce.estimateResponseApiTokensCost("completion", model, outputTokens)
 
-	return math.Trunc((inputCost+outputCost+cachedInputCost)*100000) / 100000, err
+	return inputCost + cachedInputCost + outputCost, err
 }
 
 func (ce *CostEstimator) estimateResponseApiTokensCost(costMapKey, model string, tks int64) (float64, error) {

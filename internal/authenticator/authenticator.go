@@ -3,11 +3,12 @@ package auth
 import (
 	"errors"
 	"fmt"
-	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
+
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/hasher"

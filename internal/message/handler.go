@@ -707,6 +707,18 @@ func (h *Handler) decorateEvent(m Message) error {
 		}
 	}
 
+	//if strings.HasPrefix(e.Event.Path, "/api/providers/openai/v1/responses") {
+	//	responsesReq, ok := e.Request.(*openai.ResponseRequest)
+	//	if !ok {
+	//		telemetry.Incr("bricksllm.message.handler.decorate_event.event_request_parsing_error", nil, 1)
+	//		h.log.Debug("event contains data that cannot be converted to responses api request", zap.Any("data", m.Data))
+	//		return errors.New("event request data cannot be parsed as responses api request")
+	//	}
+	//	if gopointer.ToValueOrDefault(responsesReq.Stream, false) {
+	//		fmt.Println("------------- estimating for responses api request --------------")
+	//	}
+	//}
+
 	if e.Event.Path == "/api/providers/vllm/v1/chat/completions" {
 		ccr, ok := e.Request.(*vllm.ChatRequest)
 		if !ok {
