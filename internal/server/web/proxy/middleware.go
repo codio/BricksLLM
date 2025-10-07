@@ -805,6 +805,13 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				return
 			}
 
+			if gopointer.ToValueOrDefault(responsesReq.Background, false) {
+				telemetry.Incr("bricksllm.proxy.get_middleware.background_not_allowed", nil, 1)
+				JSON(c, http.StatusForbidden, "[BricksLLM] background is not allowed")
+				c.Abort()
+				return
+			}
+
 			userId = gopointer.ToValueOrDefault(responsesReq.SafetyIdentifier, "")
 			enrichedEvent.Request = responsesReq
 			c.Set("model", gopointer.ToValueOrDefault(responsesReq.Model, ""))
