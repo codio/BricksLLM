@@ -2,8 +2,6 @@ module github.com/bricks-cloud/bricksllm
 
 go 1.24.7
 
-toolchain go1.24.7
-
 require (
 	github.com/DataDog/datadog-go/v5 v5.8.0
 	github.com/asticode/go-astisub v0.35.0
