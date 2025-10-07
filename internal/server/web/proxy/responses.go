@@ -98,6 +98,12 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
 					logError(log, "error when estimating openai cost", prod, err)
 				}
+				toolsCost, err := e.EstimateResponseApiToolCallsCost(resp.Tools, model)
+				if err != nil {
+					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_calls_cost_error", nil, 1)
+					logError(log, "error when estimating openai tool calls cost", prod, err)
+				}
+				cost += toolsCost
 			}
 
 			c.Set("costInUsd", cost)
@@ -231,6 +237,12 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 						telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
 						logError(log, "error when estimating openai cost", prod, err)
 					}
+					toolsCost, err := e.EstimateResponseApiToolCallsCost(responsesStreamResp.Response.Tools, model)
+					if err != nil {
+						telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_calls_cost_error", nil, 1)
+						logError(log, "error when estimating openai tool calls cost", prod, err)
+					}
+					streamCost += toolsCost
 					streamPromptTokenCount, err = int64ToInt(responsesStreamResp.Response.Usage.InputTokens)
 					if err != nil {
 						telemetry.Incr("bricksllm.proxy.get_responses_handler.int64_to_int_error", nil, 1)

@@ -189,6 +189,17 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	},
 }
 
+var OpenAiPerThousandCallsToolCost = map[string]float64{
+	"web_search":                   10.0,
+	"web_search_preview":           25.0,
+	"web_search_preview_reasoning": 10.0,
+}
+
+var AllowedTools = []string{
+	"web_search",
+	"web_search_preview",
+}
+
 type tokenCounter interface {
 	Count(model string, input string) (int, error)
 }
@@ -525,6 +536,34 @@ func (ce *CostEstimator) EstimateResponseApiTotalCost(model string, usage respon
 	outputCost, err := ce.estimateResponseApiTokensCost("completion", model, outputTokens)
 
 	return inputCost + cachedInputCost + outputCost, err
+}
+
+func (ce *CostEstimator) EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error) {
+	if len(tools) == 0 {
+		return 0, nil
+	}
+	totalCost := 0.0
+	for _, tool := range tools {
+		toolType := tool.Type
+		cost, ok := OpenAiPerThousandCallsToolCost[extendedToolType(toolType, model)]
+		if !ok {
+			return 0, fmt.Errorf("tool type %s is not present in the tool cost map provided", toolType)
+		}
+		totalCost += cost
+	}
+	return totalCost / 1000, nil
+}
+
+var reasoningModelPrefix = []string{"gpt-5", "o1", "o2", "o3"}
+
+func extendedToolType(toolType, model string) string {
+	if toolType != "web_search_preview" {
+		return toolType
+	}
+	if slices.ContainsFunc(reasoningModelPrefix, func(s string) bool { return strings.HasPrefix(model, s) }) {
+		return "web_search_preview_reasoning"
+	}
+	return toolType
 }
 
 func (ce *CostEstimator) estimateResponseApiTokensCost(costMapKey, model string, tks int64) (float64, error) {

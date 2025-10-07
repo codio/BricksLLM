@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,6 +58,7 @@ type estimator interface {
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
 	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
+	EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error)
 }
 
 type azureEstimator interface {
@@ -808,6 +810,21 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			if gopointer.ToValueOrDefault(responsesReq.Background, false) {
 				telemetry.Incr("bricksllm.proxy.get_middleware.background_not_allowed", nil, 1)
 				JSON(c, http.StatusForbidden, "[BricksLLM] background is not allowed")
+				c.Abort()
+				return
+			}
+
+			hasNotAllowedTools := false
+			for _, tool := range responsesReq.Tools {
+				if !slices.Contains(openai.AllowedTools, tool.Type) {
+					hasNotAllowedTools = true
+					break
+				}
+			}
+
+			if hasNotAllowedTools {
+				telemetry.Incr("bricksllm.proxy.get_middleware.tool_not_allowed", nil, 1)
+				JSON(c, http.StatusForbidden, "[BricksLLM] one of the tools is not allowed")
 				c.Abort()
 				return
 			}
