@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/bricks-cloud/bricksllm/internal/provider/azure"
+	"github.com/bricks-cloud/bricksllm/internal/provider/deepinfra"
+	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
@@ -938,6 +941,12 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Abort()
 			return
 		}
+		if !isModelSupported(c.FullPath(), model) {
+			telemetry.Incr("bricksllm.proxy.get_middleware.model_not_supported", nil, 1)
+			JSON(c, http.StatusBadRequest, "[BricksLLM] model is not supported")
+			c.Abort()
+			return
+		}
 
 		aid := c.Param("assistant_id")
 		fid := c.Param("file_id")
@@ -1332,6 +1341,67 @@ func containsPath(arr []key.PathConfig, path, method string) bool {
 			return true
 		}
 	}
-
 	return false
+}
+
+var openaiModels = map[string]struct{}{}
+var anthropicModels = map[string]struct{}{}
+var azureOpenAIModels = map[string]struct{}{}
+var vllmModels = map[string]struct{}{}
+var deepinfraModels = map[string]struct{}{}
+var bedrockAnthropicModels = map[string]struct{}{}
+
+func init() {
+	// openai models
+	initByCostMap(openaiModels, openai.OpenAiPerThousandTokenCost)
+	// anthropic models
+	initByCostMap(anthropicModels, anthropic.AnthropicPerMillionTokenCost)
+	// azure openai models
+	initByCostMap(azureOpenAIModels, azure.AzureOpenAiPerThousandTokenCost)
+	// deepinfra models
+	initByCostMap(deepinfraModels, deepinfra.DeepinfraPerMillionTokenCost)
+	// TODO: check vllm and bedrock anthropic models
+	// cost map from settings
+	// maybe disable this models or...
+}
+
+func initByCostMap(target map[string]struct{}, source map[string]map[string]float64) {
+	for _, m := range source {
+		for k, _ := range m {
+			target[k] = struct{}{}
+		}
+	}
+}
+
+func isModelSupported(path, model string) bool {
+	models := modelsMapByPath(path)
+	if models == nil {
+		return true
+	}
+	if _, ok := models[model]; ok {
+		return true
+	}
+	return false
+}
+
+func modelsMapByPath(path string) map[string]struct{} {
+	if strings.HasPrefix(path, "/api/providers/openai") {
+		return openaiModels
+	}
+	if strings.HasPrefix(path, "/api/providers/anthropic") {
+		return anthropicModels
+	}
+	if strings.HasPrefix(path, "/api/providers/azure/openai") {
+		return azureOpenAIModels
+	}
+	if strings.HasPrefix(path, "/api/providers/vllm") {
+		return vllmModels
+	}
+	if strings.HasPrefix(path, "/api/providers/deepinfra") {
+		return deepinfraModels
+	}
+	if strings.HasPrefix(path, "/api/providers/bedrock/anthropic") {
+		return bedrockAnthropicModels
+	}
+	return nil
 }
