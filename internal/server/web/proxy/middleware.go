@@ -1363,17 +1363,21 @@ func init() {
 func initByCostMap(target map[string]struct{}, source map[string]map[string]float64) {
 	for _, m := range source {
 		for k, _ := range m {
-			target[k] = struct{}{}
+			target[strings.ToLower(k)] = struct{}{}
 		}
 	}
 }
 
 func isModelSupported(path, model string) bool {
+	targetModel := strings.ToLower(model)
+	if strings.HasPrefix(path, "/api/providers/anthropic") {
+		targetModel = anthropic.SelectModel(targetModel)
+	}
 	models := modelsMapByPath(path)
 	if models == nil {
 		return true
 	}
-	if _, ok := models[model]; ok {
+	if _, ok := models[targetModel]; ok {
 		return true
 	}
 	return false
