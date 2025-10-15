@@ -101,6 +101,10 @@ func SelectModel(model string) string {
 		return "claude-3.5-haiku"
 	} else if strings.HasPrefix(model, "claude-3-haiku") {
 		return "claude-3-haiku"
+	} else if strings.HasPrefix(model, "claude-3.5-sonnet") || strings.HasPrefix(model, "claude-3-5-sonnet") {
+		return "claude-3.5-sonnet"
+	} else if strings.HasPrefix(model, "claude-3-opus") {
+		return "claude-3-opus"
 	}
 	return ""
 }
