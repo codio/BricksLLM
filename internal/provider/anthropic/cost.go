@@ -15,6 +15,9 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-opus-4":     15.0,
 		"claude-3.5-haiku":  0.8,
 		"claude-3-haiku":    0.25,
+
+		"claude-3.5-sonnet": 3.0,
+		"claude-3-opus":     15.0,
 	},
 	"completion": {
 		"claude-sonnet-4.5": 15.0,
@@ -24,6 +27,9 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-opus-4":     75.0,
 		"claude-3.5-haiku":  4.0,
 		"claude-3-haiku":    1.25,
+
+		"claude-3.5-sonnet": 15.0,
+		"claude-3-opus":     75.0,
 	},
 }
 
