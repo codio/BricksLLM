@@ -8,22 +8,28 @@ import (
 
 var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 	"prompt": {
-		"claude-instant":    0.8,
-		"claude":            8,
-		"claude-3-opus":     15,
-		"claude-3-sonnet":   3,
-		"claude-3.5-sonnet": 3,
-		"claude-3.5-haiku":  1,
+		"claude-sonnet-4.5": 3.0,
+		"claude-sonnet-4":   3.0,
+		"claude-3.7-sonnet": 3.0,
+		"claude-opus-4.1":   15.0,
+		"claude-opus-4":     15.0,
+		"claude-3.5-haiku":  0.8,
 		"claude-3-haiku":    0.25,
+
+		"claude-3.5-sonnet": 3.0,
+		"claude-3-opus":     15.0,
 	},
 	"completion": {
-		"claude-instant":    2.4,
-		"claude":            24,
-		"claude-3-opus":     75,
-		"claude-3-sonnet":   15,
-		"claude-3.5-sonnet": 15,
-		"claude-3.5-haiku":  5,
+		"claude-sonnet-4.5": 15.0,
+		"claude-sonnet-4":   15.0,
+		"claude-3.7-sonnet": 15.0,
+		"claude-opus-4.1":   75.0,
+		"claude-opus-4":     75.0,
+		"claude-3.5-haiku":  4.0,
 		"claude-3-haiku":    1.25,
+
+		"claude-3.5-sonnet": 15.0,
+		"claude-3-opus":     75.0,
 	},
 }
 
@@ -68,7 +74,7 @@ func (ce *CostEstimator) EstimatePromptCost(model string, tks int) (float64, err
 	if strings.HasPrefix(model, "us") {
 		selected = convertAmazonModelToAnthropicModel(model)
 	} else {
-		selected = selectModel(model)
+		selected = SelectModel(model)
 	}
 
 	cost, ok := costMap[selected]
@@ -80,23 +86,26 @@ func (ce *CostEstimator) EstimatePromptCost(model string, tks int) (float64, err
 	return tksInFloat / 1000000 * cost, nil
 }
 
-func selectModel(model string) string {
-	if strings.HasPrefix(model, "claude-3-opus") {
-		return "claude-3-opus"
-	} else if strings.HasPrefix(model, "claude-3-sonnet") {
-		return "claude-3-sonnet"
-	} else if strings.HasPrefix(model, "claude-3.5-sonnet") || strings.HasPrefix(model, "claude-3-5-sonnet") {
-		return "claude-3.5-sonnet"
+func SelectModel(model string) string {
+	if strings.HasPrefix(model, "claude-sonnet-4.5") || strings.HasPrefix(model, "claude-sonnet-4-5") {
+		return "claude-sonnet-4.5"
+	} else if strings.HasPrefix(model, "claude-sonnet-4") {
+		return "claude-sonnet-4"
+	} else if strings.HasPrefix(model, "claude-3.7-sonnet") || strings.HasPrefix(model, "claude-3-7-sonnet") {
+		return "claude-3.7-sonnet"
+	} else if strings.HasPrefix(model, "claude-opus-4.1") || strings.HasPrefix(model, "claude-opus-4-1") {
+		return "claude-opus-4.1"
+	} else if strings.HasPrefix(model, "claude-opus-4") {
+		return "claude-opus-4"
 	} else if strings.HasPrefix(model, "claude-3.5-haiku") || strings.HasPrefix(model, "claude-3-5-haiku") {
 		return "claude-3.5-haiku"
 	} else if strings.HasPrefix(model, "claude-3-haiku") {
 		return "claude-3-haiku"
-	} else if strings.HasPrefix(model, "claude-instant") {
-		return "claude-instant"
-	} else if strings.HasPrefix(model, "claude") {
-		return "claude"
+	} else if strings.HasPrefix(model, "claude-3.5-sonnet") || strings.HasPrefix(model, "claude-3-5-sonnet") {
+		return "claude-3.5-sonnet"
+	} else if strings.HasPrefix(model, "claude-3-opus") {
+		return "claude-3-opus"
 	}
-
 	return ""
 }
 
@@ -106,7 +115,7 @@ func convertAmazonModelToAnthropicModel(model string) string {
 		return model
 	}
 
-	return selectModel(parts[2])
+	return SelectModel(parts[2])
 }
 
 func (ce *CostEstimator) EstimateCompletionCost(model string, tks int) (float64, error) {
@@ -119,7 +128,7 @@ func (ce *CostEstimator) EstimateCompletionCost(model string, tks int) (float64,
 	if strings.HasPrefix(model, "us") {
 		selected = convertAmazonModelToAnthropicModel(model)
 	} else {
-		selected = selectModel(model)
+		selected = SelectModel(model)
 	}
 
 	cost, ok := costMap[selected]
