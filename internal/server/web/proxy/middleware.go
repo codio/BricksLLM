@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bricks-cloud/bricksllm/internal/provider/azure"
+	"github.com/bricks-cloud/bricksllm/internal/provider/deepinfra"
 	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
@@ -988,6 +990,12 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Abort()
 			return
 		}
+		if !isModelSupported(c.FullPath(), model) {
+			telemetry.Incr("bricksllm.proxy.get_middleware.model_not_supported", nil, 1)
+			JSON(c, http.StatusBadRequest, "[BricksLLM] model is not supported")
+			c.Abort()
+			return
+		}
 
 		aid := c.Param("assistant_id")
 		fid := c.Param("file_id")
@@ -1382,6 +1390,60 @@ func containsPath(arr []key.PathConfig, path, method string) bool {
 			return true
 		}
 	}
-
 	return false
+}
+
+var openaiModels = map[string]struct{}{}
+var anthropicModels = map[string]struct{}{}
+var azureOpenAIModels = map[string]struct{}{}
+var deepinfraModels = map[string]struct{}{}
+
+func init() {
+	// openai models
+	initByCostMap(openaiModels, openai.OpenAiPerThousandTokenCost)
+	// anthropic models
+	initByCostMap(anthropicModels, anthropic.AnthropicPerMillionTokenCost)
+	// azure openai models
+	initByCostMap(azureOpenAIModels, azure.AzureOpenAiPerThousandTokenCost)
+	// deepinfra models
+	initByCostMap(deepinfraModels, deepinfra.DeepinfraPerMillionTokenCost)
+}
+
+func initByCostMap(target map[string]struct{}, source map[string]map[string]float64) {
+	for _, m := range source {
+		for k, _ := range m {
+			target[strings.ToLower(k)] = struct{}{}
+		}
+	}
+}
+
+func isModelSupported(path, model string) bool {
+	targetModel := strings.ToLower(model)
+	if strings.HasPrefix(path, "/api/providers/anthropic") {
+		targetModel = anthropic.SelectModel(targetModel)
+	}
+	models := modelsMapByPath(path)
+	if models == nil {
+		return true
+	}
+	if _, ok := models[targetModel]; ok {
+		return true
+	}
+	return false
+}
+
+func modelsMapByPath(path string) map[string]struct{} {
+	if strings.HasPrefix(path, "/api/providers/openai") {
+		return openaiModels
+	}
+	if strings.HasPrefix(path, "/api/providers/anthropic") {
+		return anthropicModels
+	}
+	if strings.HasPrefix(path, "/api/providers/azure/openai") {
+		return azureOpenAIModels
+	}
+	if strings.HasPrefix(path, "/api/providers/deepinfra") {
+		return deepinfraModels
+	}
+	return nil
 }
