@@ -69,8 +69,6 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"gpt-4o-mini-search-preview":   0.000150,
 		"gpt-4o-search-preview":        0.002500,
 		"computer-use-preview":         0.003000,
-		"gpt-image-1":                  0.005000,
-		"gpt-image-1-mini":             0.002000,
 		"chatgpt-4o-latest":            0.005000,
 		"gpt-4-turbo-2024-04-09":       0.010000,
 		"gpt-4-0125-preview":           0.010000,
@@ -112,8 +110,6 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"o3-mini":                      0.000550,
 		"o1-mini":                      0.000550,
 		"codex-mini-latest":            0.000375,
-		"gpt-image-1":                  0.001250,
-		"gpt-image-1-mini":             0.000200,
 	},
 	"finetune": {
 		"gpt-4-0613":         0.09,
