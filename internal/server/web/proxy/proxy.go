@@ -17,10 +17,13 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/policy"
 	"github.com/bricks-cloud/bricksllm/internal/provider"
 	"github.com/bricks-cloud/bricksllm/internal/provider/custom"
+	"github.com/bricks-cloud/bricksllm/internal/provider/openai"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
+	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
+	gopointer "github.com/sergei-bronnikov/go-pointer"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -103,6 +106,11 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 
 	// completions
 	router.POST("/api/providers/openai/v1/chat/completions", getChatCompletionHandler(prod, private, client, e))
+
+	// responses
+	// https://api.openai.com/v1/responses
+	router.POST("/api/providers/openai/v1/responses", getResponsesHandler(prod, private, client, e))
+	router.POST("/api/providers/openai/v1/responses/*wildcard", getResponsesHandler(prod, private, client, e))
 
 	// embeddings
 	router.POST("/api/providers/openai/v1/embeddings", getEmbeddingHandler(prod, private, client, e))
@@ -1336,6 +1344,38 @@ func logRequest(log *zap.Logger, prod, private bool, r *goopenai.ChatCompletionR
 					return nil
 				},
 			)))
+	}
+}
+
+func logResponsesRequest(log *zap.Logger, prod, private bool, r *openai.ResponseRequest) {
+	if prod {
+		fields := []zapcore.Field{
+			zap.Time("createdAt", time.Now()),
+			zap.String("model", gopointer.ToValueOrDefault(r.Model, "unknown")),
+			zap.Bool("stream", gopointer.ToValueOrDefault(r.Stream, false)),
+		}
+
+		if !private {
+			fields = append(fields, zap.Any("input", r.Input))
+		}
+
+		log.Info("openai responses request", fields...)
+	}
+}
+
+func logResponsesResponse(log *zap.Logger, prod, private bool, r *responsesOpenai.Response) {
+	if prod {
+		fields := []zapcore.Field{
+			zap.Time("createdAt", time.Now()),
+			zap.String("model", r.Model),
+			zap.String("id", r.ID),
+		}
+
+		if !private {
+			fields = append(fields, zap.Any("output", r.OutputText()))
+		}
+
+		log.Info("openai responses request", fields...)
 	}
 }
 

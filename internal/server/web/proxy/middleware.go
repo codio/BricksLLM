@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +31,10 @@ import (
 	"github.com/tidwall/sjson"
 	"go.uber.org/zap"
 
+	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
+
+	"github.com/sergei-bronnikov/go-pointer"
 )
 
 type keyMemStorage interface {
@@ -55,6 +59,8 @@ type estimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
+	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
+	EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error)
 }
 
 type azureEstimator interface {
@@ -793,6 +799,49 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 
 			policyInput = ccr
+		}
+
+		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/responses") {
+			responsesReq := &openai.ResponseRequest{}
+			err = json.Unmarshal(body, responsesReq)
+			if err != nil {
+				logError(logWithCid, "error when unmarshalling openai responses request", prod, err)
+				return
+			}
+
+			if gopointer.ToValueOrDefault(responsesReq.Background, false) {
+				telemetry.Incr("bricksllm.proxy.get_middleware.background_not_allowed", nil, 1)
+				JSON(c, http.StatusForbidden, "[BricksLLM] background is not allowed")
+				c.Abort()
+				return
+			}
+
+			hasNotAllowedTools := false
+			for _, tool := range responsesReq.Tools {
+				if !slices.Contains(openai.AllowedTools, tool.Type) {
+					hasNotAllowedTools = true
+					break
+				}
+			}
+
+			if hasNotAllowedTools {
+				telemetry.Incr("bricksllm.proxy.get_middleware.tool_not_allowed", nil, 1)
+				JSON(c, http.StatusForbidden, "[BricksLLM] one of the tools is not allowed")
+				c.Abort()
+				return
+			}
+
+			userId = gopointer.ToValueOrDefault(responsesReq.SafetyIdentifier, "")
+			enrichedEvent.Request = responsesReq
+			c.Set("model", gopointer.ToValueOrDefault(responsesReq.Model, ""))
+
+			logResponsesRequest(logWithCid, prod, private, responsesReq)
+
+			if gopointer.ToValueOrDefault(responsesReq.Stream, false) {
+				c.Set("stream", true)
+			}
+
+			policyInput = responsesReq
 		}
 
 		if c.FullPath() == "/api/providers/openai/v1/embeddings" {
