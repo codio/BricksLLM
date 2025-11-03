@@ -1,0 +1,16 @@
+.git
+.github
+Dockerfile
+
+.DS_Store
+*.class
+*.log
+*~
+
+# idea
+.idea
+.idea_modules
+/.worksheet/
+
+# Visual Studio Code
+.vscode
