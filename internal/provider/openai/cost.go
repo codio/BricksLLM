@@ -36,6 +36,13 @@ func parseFinetuneModel(model string) string {
 
 var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"prompt": {
+		"gpt-5.2-chat-latest":          0.001750,
+		"gpt-5.1-chat-latest":          0.001250,
+		"gpt-5.1-codex-max":            0.001250,
+		"gpt-5.1-codex":                0.001250,
+		"gpt-5.2-pro":                  0.021000,
+		"gpt-5.2":                      0.001750,
+		"gpt-5.1":                      0.001250,
 		"gpt-5":                        0.001250,
 		"gpt-5-mini":                   0.000250,
 		"gpt-5-nano":                   0.000050,
@@ -88,6 +95,12 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"babbage-002":                  0.000400,
 	},
 	"cached-prompt": {
+		"gpt-5.2-chat-latest":          0.000175,
+		"gpt-5.1-chat-latest":          0.000125,
+		"gpt-5.1-codex-max":            0.000125,
+		"gpt-5.1-codex":                0.000125,
+		"gpt-5.2":                      0.000175,
+		"gpt-5.1":                      0.000125,
 		"gpt-5":                        0.000125,
 		"gpt-5-mini":                   0.000025,
 		"gpt-5-nano":                   0.000005,
@@ -130,6 +143,13 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"tts-1-hd":  0.03,
 	},
 	"completion": {
+		"gpt-5.2-chat-latest":          0.014000,
+		"gpt-5.1-chat-latest":          0.010000,
+		"gpt-5.1-codex-max":            0.010000,
+		"gpt-5.1-codex":                0.010000,
+		"gpt-5.2-pro":                  0.168000,
+		"gpt-5.2":                      0.014000,
+		"gpt-5.1":                      0.010000,
 		"gpt-5":                        0.010000,
 		"gpt-5-mini":                   0.002000,
 		"gpt-5-nano":                   0.000400,
