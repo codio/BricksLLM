@@ -14,6 +14,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/provider/azure"
 	"github.com/bricks-cloud/bricksllm/internal/provider/deepinfra"
 	"github.com/bricks-cloud/bricksllm/internal/provider/xcustom"
+	gopointer "github.com/sergei-bronnikov/go-pointer"
 
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
@@ -33,8 +34,6 @@ import (
 
 	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
-
-	"github.com/sergei-bronnikov/go-pointer"
 )
 
 type keyMemStorage interface {
@@ -1418,6 +1417,10 @@ func initByCostMap(target map[string]struct{}, source map[string]map[string]floa
 }
 
 func isModelSupported(path, model string) bool {
+	if len(model) == 0 {
+		return true
+	}
+
 	targetModel := strings.ToLower(model)
 	if strings.HasPrefix(path, "/api/providers/anthropic") {
 		targetModel = anthropic.SelectModel(targetModel)
