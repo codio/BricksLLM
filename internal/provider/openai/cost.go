@@ -219,11 +219,23 @@ var OpenAiPerThousandCallsToolCost = map[string]float64{
 	"web_search":                   10.0,
 	"web_search_preview":           25.0,
 	"web_search_preview_reasoning": 10.0,
+	"file_search":                  2.5,
+}
+
+var OpenAiCodeInterpreterContainerCost = map[string]float64{
+	"1g":  0.03,
+	"4g":  0.12,
+	"16g": 0.48,
+	"64g": 1.92,
 }
 
 var AllowedTools = []string{
 	"web_search",
 	"web_search_preview",
+
+	"code_interpreter",
+
+	"file_search",
 }
 
 type tokenCounter interface {
@@ -571,6 +583,9 @@ func (ce *CostEstimator) EstimateResponseApiToolCallsCost(tools []responsesOpena
 	totalCost := 0.0
 	for _, tool := range tools {
 		toolType := tool.Type
+		if toolType == "code_interpreter" {
+			continue
+		}
 		cost, ok := OpenAiPerThousandCallsToolCost[extendedToolType(toolType, model)]
 		if !ok {
 			return 0, fmt.Errorf("tool type %s is not present in the tool cost map provided", toolType)
@@ -578,6 +593,26 @@ func (ce *CostEstimator) EstimateResponseApiToolCallsCost(tools []responsesOpena
 		totalCost += cost
 	}
 	return totalCost / 1000, nil
+}
+
+func (ce *CostEstimator) EstimateResponseApiToolCreateContainerCost(req *ResponseRequest) (float64, error) {
+	if req == nil {
+		return 0, nil
+	}
+	totalCost := 0.0
+	for _, tool := range req.Tools {
+		c := tool.GetContainerAsResponseRequestToolContainer()
+		if c == nil {
+			continue
+		}
+		limit := c.GetMemoryLimit()
+		cost, ok := OpenAiCodeInterpreterContainerCost[limit]
+		if !ok {
+			return 0, fmt.Errorf("container with memory limit %s is not present in the code interpreter container cost map", limit)
+		}
+		totalCost += cost
+	}
+	return totalCost, nil
 }
 
 var reasoningModelPrefix = []string{"gpt-5", "o1", "o2", "o3"}

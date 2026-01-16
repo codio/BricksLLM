@@ -30,6 +30,45 @@ type ResponseRequest struct {
 	//User            *string  `json:"user,omitzero"` //Deprecated
 }
 
-type ResponseRequestToolUnion struct {
+type ResponseRequestToolContainer struct {
 	Type string `json:"type"`
+	// memory_limit
+	MemoryLimit *string `json:"memory_limit,omitzero"`
+}
+
+func (c *ResponseRequestToolContainer) GetMemoryLimit() string {
+	if c.MemoryLimit != nil {
+		return *c.MemoryLimit
+	}
+	return "1g"
+}
+
+type ResponseRequestToolUnion struct {
+	Type      string `json:"type"`
+	Container any    `json:"container"`
+}
+
+func (u *ResponseRequestToolUnion) GetContainerAsResponseRequestToolContainer() *ResponseRequestToolContainer {
+	if container, ok := u.Container.(map[string]interface{}); ok {
+		cType := "auto"
+		rawType, exists := container["type"]
+		if !exists {
+			cType = "auto"
+		}
+		if typeStr, ok := rawType.(string); ok {
+			cType = typeStr
+		}
+		toolContainer := &ResponseRequestToolContainer{
+			Type:        cType,
+			MemoryLimit: nil,
+		}
+
+		if memoryLimit, exists := container["memory_limit"]; exists {
+			if memoryLimitStr, ok := memoryLimit.(string); ok {
+				toolContainer.MemoryLimit = &memoryLimitStr
+			}
+		}
+		return toolContainer
+	}
+	return nil
 }

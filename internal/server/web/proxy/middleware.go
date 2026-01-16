@@ -60,6 +60,7 @@ type estimator interface {
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
 	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
 	EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error)
+	EstimateResponseApiToolCreateContainerCost(req *openai.ResponseRequest) (float64, error)
 }
 
 type azureEstimator interface {
@@ -808,6 +809,8 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				return
 			}
 
+			ginCtxSetResponsesRequest(c, responsesReq)
+
 			if gopointer.ToValueOrDefault(responsesReq.Background, false) {
 				telemetry.Incr("bricksllm.proxy.get_middleware.background_not_allowed", nil, 1)
 				JSON(c, http.StatusForbidden, "[BricksLLM] background is not allowed")
@@ -828,6 +831,25 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				JSON(c, http.StatusForbidden, "[BricksLLM] one of the tools is not allowed")
 				c.Abort()
 				return
+			}
+
+			isCreateContainerTool := false
+			var containerMemLimit string
+			for _, tool := range responsesReq.Tools {
+				if tool.GetContainerAsResponseRequestToolContainer() != nil {
+					isCreateContainerTool = true
+					containerMemLimit = tool.GetContainerAsResponseRequestToolContainer().GetMemoryLimit()
+					break
+				}
+			}
+			if isCreateContainerTool {
+				_, ok := openai.OpenAiCodeInterpreterContainerCost[containerMemLimit]
+				if !ok {
+					telemetry.Incr("bricksllm.proxy.get_middleware.container_memory_limit_not_allowed", nil, 1)
+					JSON(c, http.StatusForbidden, "[BricksLLM] container memory limit is not allowed")
+					c.Abort()
+					return
+				}
 			}
 
 			userId = gopointer.ToValueOrDefault(responsesReq.SafetyIdentifier, "")
