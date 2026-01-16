@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bricks-cloud/bricksllm/internal/provider/openai"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
@@ -98,6 +99,13 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
 					logError(log, "error when estimating openai cost", prod, err)
 				}
+				reqResp, _ := ginCtxGetResponsesRequest(c)
+				containerCost, err := e.EstimateResponseApiToolCreateContainerCost(reqResp)
+				if err != nil {
+					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_container_cost_error", nil, 1)
+					logError(log, "error when estimating openai tool container cost", prod, err)
+				}
+				cost += containerCost
 				toolsCost, err := e.EstimateResponseApiToolCallsCost(resp.Tools, model)
 				if err != nil {
 					telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_calls_cost_error", nil, 1)
@@ -237,6 +245,13 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 						telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_total_cost_error", nil, 1)
 						logError(log, "error when estimating openai cost", prod, err)
 					}
+					reqResp, _ := ginCtxGetResponsesRequest(c)
+					containerCost, err := e.EstimateResponseApiToolCreateContainerCost(reqResp)
+					if err != nil {
+						telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_container_cost_error", nil, 1)
+						logError(log, "error when estimating openai tool container cost", prod, err)
+					}
+					streamCost += containerCost
 					toolsCost, err := e.EstimateResponseApiToolCallsCost(responsesStreamResp.Response.Tools, model)
 					if err != nil {
 						telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.estimate_tool_calls_cost_error", nil, 1)
@@ -267,4 +282,22 @@ func int64ToInt(src int64) (int, error) {
 		return 0, fmt.Errorf("int64 value %d overflows int", src)
 	}
 	return int(src), nil
+}
+
+func ginCtxSetResponsesRequest(c *gin.Context, req *openai.ResponseRequest) {
+	c.Set("responses_request", req)
+}
+
+func ginCtxGetResponsesRequest(c *gin.Context) (*openai.ResponseRequest, error) {
+	reqAny, exists := c.Get("responses_request")
+	if !exists {
+		return nil, errors.New("responses request not found in gin context")
+	}
+
+	req, ok := reqAny.(*openai.ResponseRequest)
+	if !ok {
+		return nil, errors.New("responses request in gin context has invalid type")
+	}
+
+	return req, nil
 }
