@@ -236,6 +236,7 @@ var AllowedTools = []string{
 	"code_interpreter",
 
 	"file_search",
+	"function",
 }
 
 type tokenCounter interface {
@@ -583,12 +584,10 @@ func (ce *CostEstimator) EstimateResponseApiToolCallsCost(tools []responsesOpena
 	totalCost := 0.0
 	for _, tool := range tools {
 		toolType := tool.Type
-		if toolType == "code_interpreter" {
-			continue
-		}
 		cost, ok := OpenAiPerThousandCallsToolCost[extendedToolType(toolType, model)]
 		if !ok {
-			return 0, fmt.Errorf("tool type %s is not present in the tool cost map provided", toolType)
+			// The permission check is performed in the middleware. The additional cost is taken from OpenAiPerThousandCallsToolCost
+			continue
 		}
 		totalCost += cost
 	}
