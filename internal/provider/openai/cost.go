@@ -36,6 +36,11 @@ func parseFinetuneModel(model string) string {
 
 var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"prompt": {
+		"gpt-image-1.5":        0.005,
+		"gpt-image-1":          0.005,
+		"chatgpt-image-latest": 0.005,
+		"gpt-image-1-mini":     0.002,
+
 		"gpt-5.2-chat-latest":          0.001750,
 		"gpt-5.1-chat-latest":          0.001250,
 		"gpt-5.1-codex-max":            0.001250,
@@ -95,6 +100,11 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"babbage-002":                  0.000400,
 	},
 	"cached-prompt": {
+		"gpt-image-1.5":        0.00125,
+		"gpt-image-1":          0.00125,
+		"chatgpt-image-latest": 0.00125,
+		"gpt-image-1-mini":     0.0002,
+
 		"gpt-5.2-chat-latest":          0.000175,
 		"gpt-5.1-chat-latest":          0.000125,
 		"gpt-5.1-codex-max":            0.000125,
@@ -143,6 +153,9 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"tts-1-hd":  0.03,
 	},
 	"completion": {
+		"gpt-image-1.5":        0.010,
+		"chatgpt-image-latest": 0.010,
+
 		"gpt-5.2-chat-latest":          0.014000,
 		"gpt-5.1-chat-latest":          0.010000,
 		"gpt-5.1-codex-max":            0.010000,
@@ -241,6 +254,32 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"gpt-image-1-mini-1024-medium": 0.011,
 		"gpt-image-1-mini-1024-low":    0.005,
 	},
+	"images-tokens-input": {
+		"gpt-image-1.5":        0.008,
+		"gpt-image-1":          0.010,
+		"chatgpt-image-latest": 0.008,
+		"gpt-image-1-mini":     0.0025,
+	},
+	"images-tokens-cached-input": {
+		"gpt-image-1.5":        0.002,
+		"gpt-image-1":          0.0025,
+		"chatgpt-image-latest": 0.002,
+		"gpt-image-1-mini":     0.00025,
+	},
+	"images-tokens-output": {
+		"gpt-image-1.5":        0.032,
+		"gpt-image-1":          0.040,
+		"chatgpt-image-latest": 0.032,
+		"gpt-image-1-mini":     0.008,
+	},
+}
+
+var imageModelsWithTokensCost = map[string]interface{}{}
+
+func init() {
+	for model := range OpenAiPerThousandTokenCost["images-tokens-input"] {
+		imageModelsWithTokensCost[model] = struct{}{}
+	}
 }
 
 var OpenAiPerThousandCallsToolCost = map[string]float64{
@@ -430,7 +469,47 @@ func (ce *CostEstimator) EstimateCompletionsStreamCostWithTokenCounts(model stri
 	return tks, cost, nil
 }
 
-func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string) (float64, error) {
+func (ce *CostEstimator) estimateImageByMetadata(model string, metadata *ImageResponseMetadata) (float64, error) {
+	if metadata == nil {
+		return 0, errors.New("metadata is nil")
+	}
+	if _, ok := imageModelsWithTokensCost[model]; !ok {
+		return 0, errors.New("model is not present in the images tokens cost map")
+	}
+	var totalCost float64
+
+	textInputTokens := metadata.Usage.InputTokensDetails.TextTokens
+	textInputCostMap, ok := ce.tokenCostMap["prompt"]
+	if !ok {
+		return 0, errors.New("images input tokens cost map is not provided")
+	}
+	textInputCost, _ := textInputCostMap[model]
+	totalCost += (float64(textInputTokens) / 1000) * textInputCost
+
+	imageInputTokens := metadata.Usage.InputTokensDetails.ImageTokens
+	imageInputCostMap, ok := ce.tokenCostMap["images-tokens-input"]
+	if !ok {
+		return 0, errors.New("images input tokens cost map is not provided")
+	}
+	imageInputCost, _ := imageInputCostMap[model]
+	totalCost += (float64(imageInputTokens) / 1000) * imageInputCost
+
+	outputTokens := metadata.Usage.OutputTokens
+	imageOutputCostMap, ok := ce.tokenCostMap["images-tokens-output"]
+	if !ok {
+		return 0, errors.New("images output tokens cost map is not provided")
+	}
+	imageOutputCost, _ := imageOutputCostMap[model]
+	totalCost += (float64(outputTokens) / 1000) * imageOutputCost
+
+	return totalCost, nil
+}
+
+func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string, metadata *ImageResponseMetadata) (float64, error) {
+	mCost, err := ce.estimateImageByMetadata(model, metadata)
+	if err == nil {
+		return mCost, nil
+	}
 	simpleRes, err := convertResToSimple(resolution)
 	if err != nil {
 		return 0, err

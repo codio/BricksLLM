@@ -11,6 +11,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/provider"
 	"github.com/bricks-cloud/bricksllm/internal/provider/anthropic"
 	"github.com/bricks-cloud/bricksllm/internal/provider/custom"
+	"github.com/bricks-cloud/bricksllm/internal/provider/openai"
 	"github.com/bricks-cloud/bricksllm/internal/provider/vllm"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/user"
@@ -39,7 +40,7 @@ type estimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
 	EstimateChatCompletionPromptTokenCounts(model string, r *goopenai.ChatCompletionRequest) (int, error)
-	EstimateImagesCost(model, quality, resolution string) (float64, error)
+	EstimateImagesCost(model, quality, resolution string, metadata *openai.ImageResponseMetadata) (float64, error)
 }
 
 type azureEstimator interface {
@@ -428,7 +429,7 @@ func (h *Handler) decorateEvent(m Message) error {
 			return errors.New("event request data cannot be parsed as openai image request")
 		}
 		if e.Event.Status == http.StatusOK {
-			cost, err := h.e.EstimateImagesCost(string(gir.Model), string(gir.Quality), string(gir.Size))
+			cost, err := h.e.EstimateImagesCost(string(gir.Model), string(gir.Quality), string(gir.Size), e.ImageResponseMetadata)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 				return err
@@ -445,7 +446,7 @@ func (h *Handler) decorateEvent(m Message) error {
 			return errors.New("event request data cannot be parsed as openai image edit request")
 		}
 		if e.Event.Status == http.StatusOK {
-			cost, err := h.e.EstimateImagesCost(string(eir.Model), "", string(eir.Size))
+			cost, err := h.e.EstimateImagesCost(string(eir.Model), "", string(eir.Size), e.ImageResponseMetadata)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 				return err
@@ -462,7 +463,7 @@ func (h *Handler) decorateEvent(m Message) error {
 			return errors.New("event request data cannot be parsed as openai image variation request")
 		}
 		if e.Event.Status == http.StatusOK {
-			cost, err := h.e.EstimateImagesCost(string(vir.Model), "", string(vir.Size))
+			cost, err := h.e.EstimateImagesCost(string(vir.Model), "", string(vir.Size), e.ImageResponseMetadata)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 				return err

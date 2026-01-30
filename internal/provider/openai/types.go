@@ -72,3 +72,20 @@ func (u *ResponseRequestToolUnion) GetContainerAsResponseRequestToolContainer() 
 	}
 	return nil
 }
+
+type ImageResponseUsage struct {
+	TotalTokens        int                             `json:"total_tokens,omitempty"`
+	InputTokens        int                             `json:"input_tokens,omitempty"`
+	OutputTokens       int                             `json:"output_tokens,omitempty"`
+	InputTokensDetails ImageResponseInputTokensDetails `json:"input_tokens_details,omitempty"`
+}
+
+type ImageResponseInputTokensDetails struct {
+	TextTokens  int `json:"text_tokens,omitempty"`
+	ImageTokens int `json:"image_tokens,omitempty"`
+}
+type ImageResponseMetadata struct {
+	Quality string             `json:"quality,omitempty"`
+	Size    string             `json:"size,omitempty"`
+	Usage   ImageResponseUsage `json:"usage,omitempty"`
+}

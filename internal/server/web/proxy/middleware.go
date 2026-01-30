@@ -301,6 +301,11 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				enrichedEvent.Response = resp
 			}
 
+			imageResponseMetadata := getCtxImageResponseMetadata(c)
+			if imageResponseMetadata != nil {
+				enrichedEvent.ImageResponseMetadata = imageResponseMetadata
+			}
+
 			pub.Publish(message.Message{
 				Type: "event",
 				Data: enrichedEvent,
