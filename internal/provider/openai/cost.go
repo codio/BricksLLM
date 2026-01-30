@@ -212,6 +212,34 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"dall-e-3-1792-standart": 0.08,
 		"dall-e-3-1024-hd":       0.08,
 		"dall-e-3-1792-hd":       0.12,
+
+		"gpt-image-1.5-1536-high":   0.2,
+		"gpt-image-1.5-1536-medium": 0.05,
+		"gpt-image-1.5-1536-low":    0.013,
+		"gpt-image-1.5-1024-high":   0.133,
+		"gpt-image-1.5-1024-medium": 0.034,
+		"gpt-image-1.5-1024-low":    0.009,
+
+		"chatgpt-image-latest-1536-high":   0.2,
+		"chatgpt-image-latest-1536-medium": 0.05,
+		"chatgpt-image-latest-1536-low":    0.013,
+		"chatgpt-image-latest-1024-high":   0.133,
+		"chatgpt-image-latest-1024-medium": 0.034,
+		"chatgpt-image-latest-1024-low":    0.009,
+
+		"gpt-image-1-1536-high":   0.25,
+		"gpt-image-1-1536-medium": 0.063,
+		"gpt-image-1-1536-low":    0.016,
+		"gpt-image-1-1024-high":   0.167,
+		"gpt-image-1-1024-medium": 0.042,
+		"gpt-image-1-1024-low":    0.011,
+
+		"gpt-image-1-mini-1536-high":   0.052,
+		"gpt-image-1-mini-1536-medium": 0.015,
+		"gpt-image-1-mini-1536-low":    0.006,
+		"gpt-image-1-mini-1024-high":   0.036,
+		"gpt-image-1-mini-1024-medium": 0.011,
+		"gpt-image-1-mini-1024-low":    0.005,
 	},
 }
 
@@ -419,6 +447,11 @@ func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string) (
 		if err != nil {
 			return 0, err
 		}
+	case "gpt-image-1", "gpt-image-1.5", "chatgpt-image-latest", "gpt-image-1-mini":
+		normalizedModel, err = prepareGptImageModel(quality, simpleRes, model)
+		if err != nil {
+			return 0, err
+		}
 	default:
 		return 0, errors.New("model is not present in the images cost map")
 	}
@@ -444,6 +477,9 @@ func convertResToSimple(resolution string) (string, error) {
 	}
 	if strings.Contains(resolution, "1792") {
 		return "1792", nil
+	}
+	if strings.Contains(resolution, "1536") {
+		return "1536", nil
 	}
 	if strings.Contains(resolution, "1024") {
 		return "1024", nil
@@ -490,6 +526,45 @@ func prepareDallE3Quality(quality string) (string, error) {
 	}
 	if quality == "" {
 		return "standart", nil
+	}
+	return quality, nil
+}
+
+var allowedGptImageResolutions = []string{"1024", "1536", "auto"}
+var allowedGptImageQualities = []string{"low", "medium", "high", "auto"}
+
+func prepareGptImageModel(quality, resolution, model string) (string, error) {
+	preparedQuality, err := prepareGptImageQuality(quality)
+	if err != nil {
+		return "", err
+	}
+	simpleRes, err := convertResToSimple(resolution)
+	if err != nil {
+		return "", err
+	}
+	preparedResolution, err := prepareGptImageResolution(simpleRes)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s-%s", model, preparedResolution, preparedQuality), nil
+}
+
+func prepareGptImageResolution(resolution string) (string, error) {
+	if resolution != "" && !slices.Contains(allowedGptImageResolutions, resolution) {
+		return "", errors.New("resolution is not valid")
+	}
+	if resolution == "" || resolution == "auto" {
+		return "1536", nil
+	}
+	return resolution, nil
+}
+
+func prepareGptImageQuality(quality string) (string, error) {
+	if quality != "" && !slices.Contains(allowedGptImageQualities, quality) {
+		return "", errors.New("quality is not valid")
+	}
+	if quality == "" || quality == "auto" {
+		return "high", nil
 	}
 	return quality, nil
 }
