@@ -123,11 +123,11 @@ func imageResponseMetadataFromBytes(log *zap.Logger, data []byte, prod bool) *op
 
 const imageResponseMetadataKey = "image_response_metadata"
 
-func setCtxImageResponseMetadata(ctx *gin.Context, imageResponse *openai.ImageResponseMetadata) {
-	if imageResponse == nil {
+func setCtxImageResponseMetadata(ctx *gin.Context, imageResponseMeta *openai.ImageResponseMetadata) {
+	if imageResponseMeta == nil {
 		return
 	}
-	ctx.Set(imageResponseMetadataKey, imageResponse.Usage)
+	ctx.Set(imageResponseMetadataKey, imageResponseMeta)
 }
 
 func getCtxImageResponseMetadata(ctx *gin.Context) *openai.ImageResponseMetadata {
@@ -135,9 +135,9 @@ func getCtxImageResponseMetadata(ctx *gin.Context) *openai.ImageResponseMetadata
 	if !exists {
 		return nil
 	}
-	iru, ok := usage.(openai.ImageResponseMetadata)
+	meta, ok := usage.(openai.ImageResponseMetadata)
 	if !ok {
 		return nil
 	}
-	return &iru
+	return &meta
 }
