@@ -685,14 +685,20 @@ func getPassThroughHandler(prod, private bool, client http.Client) gin.HandlerFu
 			}
 
 			if c.FullPath() == "/api/providers/openai/v1/images/generations" && c.Request.Method == http.MethodPost {
+				metadata := imageResponseMetadataFromBytes(log, bytes, prod)
+				setCtxImageResponseMetadata(c, metadata)
 				logImageResponse(log, bytes, prod, private)
 			}
 
 			if c.FullPath() == "/api/providers/openai/v1/images/edits" && c.Request.Method == http.MethodPost {
+				metadata := imageResponseMetadataFromBytes(log, bytes, prod)
+				setCtxImageResponseMetadata(c, metadata)
 				logImageResponse(log, bytes, prod, private)
 			}
 
 			if c.FullPath() == "/api/providers/openai/v1/images/variations" && c.Request.Method == http.MethodPost {
+				metadata := imageResponseMetadataFromBytes(log, bytes, prod)
+				setCtxImageResponseMetadata(c, metadata)
 				logImageResponse(log, bytes, prod, private)
 			}
 		}

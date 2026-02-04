@@ -3,6 +3,8 @@ package proxy
 import (
 	"encoding/json"
 
+	"github.com/bricks-cloud/bricksllm/internal/provider/openai"
+	"github.com/gin-gonic/gin"
 	goopenai "github.com/sashabaranov/go-openai"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -107,4 +109,35 @@ func logImageResponse(log *zap.Logger, data []byte, prod, private bool) {
 
 		log.Info("openai image response", fields...)
 	}
+}
+
+func imageResponseMetadataFromBytes(log *zap.Logger, data []byte, prod bool) *openai.ImageResponseMetadata {
+	ir := &openai.ImageResponseMetadata{}
+	err := json.Unmarshal(data, ir)
+	if err != nil {
+		logError(log, "error when unmarshalling image response metadata", prod, err)
+		return nil
+	}
+	return ir
+}
+
+const imageResponseMetadataKey = "image_response_metadata"
+
+func setCtxImageResponseMetadata(ctx *gin.Context, imageResponseMeta *openai.ImageResponseMetadata) {
+	if imageResponseMeta == nil {
+		return
+	}
+	ctx.Set(imageResponseMetadataKey, imageResponseMeta)
+}
+
+func getCtxImageResponseMetadata(ctx *gin.Context) *openai.ImageResponseMetadata {
+	usage, exists := ctx.Get(imageResponseMetadataKey)
+	if !exists {
+		return nil
+	}
+	meta, ok := usage.(openai.ImageResponseMetadata)
+	if !ok {
+		return nil
+	}
+	return &meta
 }

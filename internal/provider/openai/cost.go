@@ -36,6 +36,11 @@ func parseFinetuneModel(model string) string {
 
 var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"prompt": {
+		"gpt-image-1.5":        0.005,
+		"gpt-image-1":          0.005,
+		"chatgpt-image-latest": 0.005,
+		"gpt-image-1-mini":     0.002,
+
 		"gpt-5.2-chat-latest":          0.001750,
 		"gpt-5.1-chat-latest":          0.001250,
 		"gpt-5.1-codex-max":            0.001250,
@@ -95,6 +100,11 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"babbage-002":                  0.000400,
 	},
 	"cached-prompt": {
+		"gpt-image-1.5":        0.00125,
+		"gpt-image-1":          0.00125,
+		"chatgpt-image-latest": 0.00125,
+		"gpt-image-1-mini":     0.0002,
+
 		"gpt-5.2-chat-latest":          0.000175,
 		"gpt-5.1-chat-latest":          0.000125,
 		"gpt-5.1-codex-max":            0.000125,
@@ -143,6 +153,9 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"tts-1-hd":  0.03,
 	},
 	"completion": {
+		"gpt-image-1.5":        0.010,
+		"chatgpt-image-latest": 0.010,
+
 		"gpt-5.2-chat-latest":          0.014000,
 		"gpt-5.1-chat-latest":          0.010000,
 		"gpt-5.1-codex-max":            0.010000,
@@ -212,7 +225,61 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"dall-e-3-1792-standart": 0.08,
 		"dall-e-3-1024-hd":       0.08,
 		"dall-e-3-1792-hd":       0.12,
+
+		"gpt-image-1.5-1536-high":   0.2,
+		"gpt-image-1.5-1536-medium": 0.05,
+		"gpt-image-1.5-1536-low":    0.013,
+		"gpt-image-1.5-1024-high":   0.133,
+		"gpt-image-1.5-1024-medium": 0.034,
+		"gpt-image-1.5-1024-low":    0.009,
+
+		"chatgpt-image-latest-1536-high":   0.2,
+		"chatgpt-image-latest-1536-medium": 0.05,
+		"chatgpt-image-latest-1536-low":    0.013,
+		"chatgpt-image-latest-1024-high":   0.133,
+		"chatgpt-image-latest-1024-medium": 0.034,
+		"chatgpt-image-latest-1024-low":    0.009,
+
+		"gpt-image-1-1536-high":   0.25,
+		"gpt-image-1-1536-medium": 0.063,
+		"gpt-image-1-1536-low":    0.016,
+		"gpt-image-1-1024-high":   0.167,
+		"gpt-image-1-1024-medium": 0.042,
+		"gpt-image-1-1024-low":    0.011,
+
+		"gpt-image-1-mini-1536-high":   0.052,
+		"gpt-image-1-mini-1536-medium": 0.015,
+		"gpt-image-1-mini-1536-low":    0.006,
+		"gpt-image-1-mini-1024-high":   0.036,
+		"gpt-image-1-mini-1024-medium": 0.011,
+		"gpt-image-1-mini-1024-low":    0.005,
 	},
+	"images-tokens-input": {
+		"gpt-image-1.5":        0.008,
+		"gpt-image-1":          0.010,
+		"chatgpt-image-latest": 0.008,
+		"gpt-image-1-mini":     0.0025,
+	},
+	"images-tokens-cached-input": {
+		"gpt-image-1.5":        0.002,
+		"gpt-image-1":          0.0025,
+		"chatgpt-image-latest": 0.002,
+		"gpt-image-1-mini":     0.00025,
+	},
+	"images-tokens-output": {
+		"gpt-image-1.5":        0.032,
+		"gpt-image-1":          0.040,
+		"chatgpt-image-latest": 0.032,
+		"gpt-image-1-mini":     0.008,
+	},
+}
+
+var imageModelsWithTokensCost = map[string]interface{}{}
+
+func init() {
+	for model := range OpenAiPerThousandTokenCost["images-tokens-input"] {
+		imageModelsWithTokensCost[model] = struct{}{}
+	}
 }
 
 var OpenAiPerThousandCallsToolCost = map[string]float64{
@@ -402,7 +469,47 @@ func (ce *CostEstimator) EstimateCompletionsStreamCostWithTokenCounts(model stri
 	return tks, cost, nil
 }
 
-func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string) (float64, error) {
+func (ce *CostEstimator) estimateImageByMetadata(model string, metadata *ImageResponseMetadata) (float64, error) {
+	if metadata == nil {
+		return 0, errors.New("metadata is nil")
+	}
+	if _, ok := imageModelsWithTokensCost[model]; !ok {
+		return 0, errors.New("model is not present in the images tokens cost map")
+	}
+	var totalCost float64
+
+	textInputTokens := metadata.Usage.InputTokensDetails.TextTokens
+	textInputCostMap, ok := ce.tokenCostMap["prompt"]
+	if !ok {
+		return 0, errors.New("images input tokens cost map is not provided")
+	}
+	textInputCost, _ := textInputCostMap[model]
+	totalCost += (float64(textInputTokens) / 1000) * textInputCost
+
+	imageInputTokens := metadata.Usage.InputTokensDetails.ImageTokens
+	imageInputCostMap, ok := ce.tokenCostMap["images-tokens-input"]
+	if !ok {
+		return 0, errors.New("images input tokens cost map is not provided")
+	}
+	imageInputCost, _ := imageInputCostMap[model]
+	totalCost += (float64(imageInputTokens) / 1000) * imageInputCost
+
+	outputTokens := metadata.Usage.OutputTokens
+	imageOutputCostMap, ok := ce.tokenCostMap["images-tokens-output"]
+	if !ok {
+		return 0, errors.New("images output tokens cost map is not provided")
+	}
+	imageOutputCost, _ := imageOutputCostMap[model]
+	totalCost += (float64(outputTokens) / 1000) * imageOutputCost
+
+	return totalCost, nil
+}
+
+func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string, metadata *ImageResponseMetadata) (float64, error) {
+	mCost, err := ce.estimateImageByMetadata(model, metadata)
+	if err == nil {
+		return mCost, nil
+	}
 	simpleRes, err := convertResToSimple(resolution)
 	if err != nil {
 		return 0, err
@@ -416,6 +523,11 @@ func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string) (
 		}
 	case "dall-e-3":
 		normalizedModel, err = prepareDallE3Model(quality, simpleRes, model)
+		if err != nil {
+			return 0, err
+		}
+	case "gpt-image-1", "gpt-image-1.5", "chatgpt-image-latest", "gpt-image-1-mini":
+		normalizedModel, err = prepareGptImageModel(quality, simpleRes, model)
 		if err != nil {
 			return 0, err
 		}
@@ -444,6 +556,9 @@ func convertResToSimple(resolution string) (string, error) {
 	}
 	if strings.Contains(resolution, "1792") {
 		return "1792", nil
+	}
+	if strings.Contains(resolution, "1536") {
+		return "1536", nil
 	}
 	if strings.Contains(resolution, "1024") {
 		return "1024", nil
@@ -490,6 +605,45 @@ func prepareDallE3Quality(quality string) (string, error) {
 	}
 	if quality == "" {
 		return "standart", nil
+	}
+	return quality, nil
+}
+
+var allowedGptImageResolutions = []string{"1024", "1536", "auto"}
+var allowedGptImageQualities = []string{"low", "medium", "high", "auto"}
+
+func prepareGptImageModel(quality, resolution, model string) (string, error) {
+	preparedQuality, err := prepareGptImageQuality(quality)
+	if err != nil {
+		return "", err
+	}
+	simpleRes, err := convertResToSimple(resolution)
+	if err != nil {
+		return "", err
+	}
+	preparedResolution, err := prepareGptImageResolution(simpleRes)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s-%s", model, preparedResolution, preparedQuality), nil
+}
+
+func prepareGptImageResolution(resolution string) (string, error) {
+	if resolution != "" && !slices.Contains(allowedGptImageResolutions, resolution) {
+		return "", errors.New("resolution is not valid")
+	}
+	if resolution == "" || resolution == "auto" {
+		return "1536", nil
+	}
+	return resolution, nil
+}
+
+func prepareGptImageQuality(quality string) (string, error) {
+	if quality != "" && !slices.Contains(allowedGptImageQualities, quality) {
+		return "", errors.New("quality is not valid")
+	}
+	if quality == "" || quality == "auto" {
+		return "high", nil
 	}
 	return quality, nil
 }
