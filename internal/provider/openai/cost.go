@@ -304,6 +304,7 @@ var AllowedTools = []string{
 
 	"file_search",
 	"function",
+	"computer_use_preview",
 }
 
 type tokenCounter interface {
