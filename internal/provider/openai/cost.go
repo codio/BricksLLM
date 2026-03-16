@@ -149,8 +149,15 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	},
 	"audio": {
 		"whisper-1": 0.006,
-		"tts-1":     0.015,
-		"tts-1-hd":  0.03,
+
+		"tts-1":    0.015,
+		"tts-1-hd": 0.03,
+
+		"gpt-4o-transcribe":         0.006,
+		"gpt-4o-transcribe-diarize": 0.006,
+		"gpt-4o-mini-transcribe":    0.003,
+
+		"gpt-4o-mini-tts": 0.012,
 	},
 	"video": { // $ per sec
 		"sora-2":          0.1,
