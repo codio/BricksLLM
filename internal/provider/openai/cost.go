@@ -152,6 +152,14 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"tts-1":     0.015,
 		"tts-1-hd":  0.03,
 	},
+	"video": { // $ per sec
+		"sora-2":          0.1,
+		"sora-2-pro":      0.30,
+		"sora-2-720":      0.1,
+		"sora-2-pro-720":  0.30,
+		"sora-2-pro-1024": 0.5,
+		"sora-2-pro-1080": 0.7,
+	},
 	"completion": {
 		"gpt-image-1.5":        0.010,
 		"chatgpt-image-latest": 0.010,
@@ -767,6 +775,40 @@ func (ce *CostEstimator) EstimateResponseApiToolCreateContainerCost(req *Respons
 		totalCost += cost
 	}
 	return totalCost, nil
+}
+
+func (ce *CostEstimator) EstimateVideoCost(metadata *VideoResponseMetadata) (float64, error) {
+	if metadata == nil {
+		return 0, errors.New("metadata is nil")
+	}
+	costMap, ok := ce.tokenCostMap["video"]
+	if !ok {
+		return 0, errors.New("video cost map is not provided")
+	}
+	model := metadata.Model
+	size, err := normalizedVideoSize(metadata.Size)
+	if err != nil {
+		return 0, err
+	}
+	costKey := fmt.Sprintf("%s-%s", model, size)
+	cost, ok := costMap[costKey]
+	if !ok {
+		return 0, errors.New("model with provided size is not present in the video cost map")
+	}
+	return cost * metadata.GetSecondsAsFloat(), nil
+}
+
+func normalizedVideoSize(size string) (string, error) {
+	switch size {
+	case "720x1280", "1280x720":
+		return "720", nil
+	case "1024x1792", "1792x1024":
+		return "1024", nil
+	case "1080x1920", "1920x1080":
+		return "1080", nil
+	default:
+		return "", errors.New("size is not valid")
+	}
 }
 
 var reasoningModelPrefix = []string{"gpt-5", "o1", "o2", "o3"}

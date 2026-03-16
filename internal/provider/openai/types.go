@@ -1,5 +1,7 @@
 package openai
 
+import "strconv"
+
 type ResponseRequest struct {
 	Background         *bool                      `json:"background,omitzero"`
 	Conversation       *any                       `json:"conversation,omitzero"`
@@ -88,4 +90,17 @@ type ImageResponseMetadata struct {
 	Quality string             `json:"quality,omitempty"`
 	Size    string             `json:"size,omitempty"`
 	Usage   ImageResponseUsage `json:"usage,omitempty"`
+}
+
+type VideoResponseMetadata struct {
+	Model   string `json:"model,omitempty"`
+	Size    string `json:"size,omitempty"`
+	Seconds string `json:"seconds,omitempty"`
+}
+
+func (v *VideoResponseMetadata) GetSecondsAsFloat() float64 {
+	if secondsFloat, err := strconv.ParseFloat(v.Seconds, 64); err == nil {
+		return secondsFloat
+	}
+	return 0
 }

@@ -61,6 +61,7 @@ type estimator interface {
 	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
 	EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error)
 	EstimateResponseApiToolCreateContainerCost(req *openai.ResponseRequest) (float64, error)
+	EstimateVideoCost(metadata *openai.VideoResponseMetadata) (float64, error)
 }
 
 type azureEstimator interface {
