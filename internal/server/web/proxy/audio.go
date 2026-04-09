@@ -169,6 +169,12 @@ func getContentType(format string) string {
 
 func getTranscriptionsHandler(prod bool, client http.Client, e estimator) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		model := c.PostForm("model")
+		if model == "gpt-4o-transcribe" || model == "gpt-4o-transcribe-diarize" || model == "gpt-4o-mini-transcribe" {
+			processGPTTranscriptions(c, prod, client, e, model)
+			return
+		}
+
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.requests", nil, 1)
 

@@ -104,3 +104,19 @@ func (v *VideoResponseMetadata) GetSecondsAsFloat() float64 {
 	}
 	return 0
 }
+
+type TranscriptionResponseUsageInputTokenDetails struct {
+	TextTokens  int `json:"text_tokens,omitempty"`
+	AudioTokens int `json:"audio_tokens,omitempty"`
+}
+type TranscriptionResponseUsage struct {
+	Type              string                                      `json:"type"`
+	TotalTokens       int                                         `json:"total_tokens,omitempty"`
+	InputTokens       int                                         `json:"input_tokens,omitempty"`
+	InputTokenDetails TranscriptionResponseUsageInputTokenDetails `json:"input_token_details,omitempty"`
+	OutputTokens      int                                         `json:"output_tokens,omitempty"`
+}
+type TranscriptionResponse struct {
+	Text  string                     `json:"text,omitempty"`
+	Usage TranscriptionResponseUsage `json:"usage,omitempty"`
+}
