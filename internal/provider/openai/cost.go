@@ -159,6 +159,16 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 
 		"gpt-4o-mini-tts": 0.012,
 	},
+	"transcription-input": {
+		"gpt-4o-transcribe":         0.0025,
+		"gpt-4o-transcribe-diarize": 0.0025,
+		"gpt-4o-mini-transcribe":    0.00125,
+	},
+	"transcription-output": {
+		"gpt-4o-transcribe":         0.01,
+		"gpt-4o-transcribe-diarize": 0.01,
+		"gpt-4o-mini-transcribe":    0.005,
+	},
 	"video": { // $ per sec
 		"sora-2":          0.1,
 		"sora-2-pro":      0.30,
@@ -664,7 +674,30 @@ func prepareGptImageQuality(quality string) (string, error) {
 	return quality, nil
 }
 
-func (ce *CostEstimator) EstimateTranscriptionCost(secs float64, model string) (float64, error) {
+func (ce *CostEstimator) EstimateTranscriptionCost(secs float64, model string, usage *TranscriptionResponseUsage) (float64, error) {
+	if usage != nil {
+		inputTokens := usage.InputTokens
+		costMap, ok := ce.tokenCostMap["transcription-input"]
+		if !ok {
+			return 0, errors.New("transcription input token cost map is not provided")
+		}
+		inputCost, ok := costMap[model]
+		if !ok {
+			return 0, errors.New("model is not present in the transcription input token cost map")
+		}
+
+		outputTokens := usage.OutputTokens
+		costMap, ok = ce.tokenCostMap["transcription-output"]
+		if !ok {
+			return 0, errors.New("transcription output token cost map is not provided")
+		}
+		outputCost, ok := costMap[model]
+		if !ok {
+			return 0, errors.New("model is not present in the transcription output token cost map")
+		}
+
+		return (float64(inputTokens)/1000)*inputCost + (float64(outputTokens)/1000)*outputCost, nil
+	}
 	costMap, ok := ce.tokenCostMap["audio"]
 	if !ok {
 		return 0, errors.New("audio cost map is not provided")

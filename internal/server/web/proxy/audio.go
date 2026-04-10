@@ -297,7 +297,7 @@ func getTranscriptionsHandler(prod bool, client http.Client, e estimator) gin.Ha
 			}
 
 			if err == nil {
-				cost, err := e.EstimateTranscriptionCost(ar.Duration, c.GetString("model"))
+				cost, err := e.EstimateTranscriptionCost(ar.Duration, c.GetString("model"), nil)
 				if err != nil {
 					telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.estimate_total_cost_error", nil, 1)
 					logError(log, "error when estimating openai cost", prod, err)
@@ -457,7 +457,7 @@ func getTranslationsHandler(prod bool, client http.Client, e estimator) gin.Hand
 			}
 
 			if err == nil {
-				cost, err := e.EstimateTranscriptionCost(ar.Duration, c.GetString("model"))
+				cost, err := e.EstimateTranscriptionCost(ar.Duration, c.GetString("model"), nil)
 				if err != nil {
 					telemetry.Incr("bricksllm.proxy.get_translations_handler.estimate_total_cost_error", nil, 1)
 					logError(log, "error when estimating openai cost", prod, err)

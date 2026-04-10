@@ -73,7 +73,7 @@ func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client
 	if res.StatusCode == http.StatusOK && !isStreaming {
 		dur := time.Since(start)
 		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.latency", dur, nil, 1)
-		bytes, err := io.ReadAll(res.Body)
+		readBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			logError(log, "error when reading openai http transcriptions response body", prod, err)
 			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to read openai response body")
@@ -84,23 +84,29 @@ func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client
 		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.success", nil, 1)
 		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.success_latency", dur, nil, 1)
 
-		err = json.Unmarshal(bytes, resp)
+		err = json.Unmarshal(readBytes, resp)
 		if err != nil {
 			logError(log, "error when unmarshalling openai http response api response body", prod, err)
 		}
 
 		if err == nil {
-			// estimate
+			cost, err = e.EstimateTranscriptionCost(0, model, &resp.Usage)
+			if err != nil {
+				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.estimate_total_cost_error", nil, 1)
+				logError(log, "error when estimating openai cost", prod, err)
+			}
 		}
 
 		ginCtx.Set("costInUsd", cost)
 
 		contentType := "application/json"
+		bytesToSend := readBytes
 		if ginCtx.PostForm("response_format") == "text" {
 			contentType = "text/plain; charset=utf-8"
+			bytesToSend = []byte(resp.Text + "\n")
 		}
 
-		ginCtx.Data(res.StatusCode, contentType, bytes)
+		ginCtx.Data(res.StatusCode, contentType, bytesToSend)
 		return
 	}
 
@@ -109,7 +115,7 @@ func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client
 		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.error_latency", dur, nil, 1)
 		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.error_response", nil, 1)
 
-		bytes, err := io.ReadAll(res.Body)
+		readBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			logError(log, "error when reading openai transcriptions response body", prod, err)
 			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to read openai transcriptions response body")
@@ -117,14 +123,14 @@ func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client
 		}
 
 		errorRes := &goopenai.ErrorResponse{}
-		err = json.Unmarshal(bytes, errorRes)
+		err = json.Unmarshal(readBytes, errorRes)
 		if err != nil {
 			logError(log, "error when unmarshalling openai transcriptions error response body", prod, err)
 		}
 
 		logOpenAiError(log, prod, errorRes)
 
-		ginCtx.Data(res.StatusCode, "application/json", bytes)
+		ginCtx.Data(res.StatusCode, "application/json", readBytes)
 		return
 	}
 }

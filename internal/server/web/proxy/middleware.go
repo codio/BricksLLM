@@ -49,7 +49,7 @@ type keyStorage interface {
 }
 
 type estimator interface {
-	EstimateTranscriptionCost(secs float64, model string) (float64, error)
+	EstimateTranscriptionCost(secs float64, model string, usage *openai.TranscriptionResponseUsage) (float64, error)
 	EstimateSpeechCost(input string, model string) (float64, error)
 	EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error)
 	EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (float64, error)
