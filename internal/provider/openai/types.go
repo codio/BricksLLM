@@ -120,3 +120,29 @@ type TranscriptionResponse struct {
 	Text  string                     `json:"text,omitempty"`
 	Usage TranscriptionResponseUsage `json:"usage,omitempty"`
 }
+
+type TranscriptionStreamChunk struct {
+	Type  string                     `json:"type"`
+	Delta string                     `json:"delta,omitempty"`
+	Text  string                     `json:"text,omitempty"`
+	Usage TranscriptionResponseUsage `json:"usage,omitempty"`
+}
+
+func (c *TranscriptionStreamChunk) IsDone() bool {
+	return c.Type == "transcript.text.done"
+}
+
+func (c *TranscriptionStreamChunk) IsDelta() bool {
+	return c.Type == "transcript.text.delta"
+}
+
+func (c *TranscriptionStreamChunk) IsSegment() bool {
+	return c.Type == "transcript.text.segment"
+}
+
+func (c *TranscriptionStreamChunk) GetText() string {
+	if c.IsDelta() {
+		return c.Delta
+	}
+	return c.Text
+}

@@ -1,9 +1,12 @@
 package proxy
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -17,21 +20,30 @@ import (
 	"go.uber.org/zap"
 )
 
-const transcriptionsUrl = "https://api.openai.com/v1/audio/transcriptions"
+const (
+	transcriptionsUrl = "https://api.openai.com/v1/audio/transcriptions"
+	translationsUrl   = "https://api.openai.com/v1/audio/translations"
+)
 
 func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model string) {
-	log := util.GetLogFromCtx(ginCtx)
-	telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.requests", nil, 1)
+}
 
-	if ginCtx == nil || ginCtx.Request == nil {
-		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] context is empty")
+func processGPTTranslations(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model string) {
+}
+
+func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model, url, handler string) {
+	log := util.GetLogFromCtx(ginCtx)
+	telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.requests", handler), nil, 1)
+
+	if ginCtx.Request == nil {
+		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] request is empty")
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), ginCtx.GetDuration("requestTimeout"))
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, ginCtx.Request.Method, transcriptionsUrl, ginCtx.Request.Body)
+	req, err := http.NewRequestWithContext(ctx, ginCtx.Request.Method, url, ginCtx.Request.Body)
 	if err != nil {
 		logError(log, "error when creating transcriptions openai http request", prod, err)
 		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to create openai transcriptions http request")
@@ -133,6 +145,89 @@ func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client
 		ginCtx.Data(res.StatusCode, "application/json", readBytes)
 		return
 	}
+
+	buffer := bufio.NewReader(res.Body)
+	content := ""
+	streamingResponse := [][]byte{}
+
+	streamCost := 0.0
+
+	defer func() {
+		ginCtx.Set("content", content)
+		ginCtx.Set("streaming_response", bytes.Join(streamingResponse, []byte{'\n'}))
+
+		ginCtx.Set("costInUsd", streamCost)
+	}()
+
+	telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.streaming_response", nil, 1)
+	ginCtx.Stream(func(w io.Writer) bool {
+		raw, err := buffer.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				return false
+			}
+
+			if errors.Is(err, context.DeadlineExceeded) {
+				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.context_deadline_exceeded_error", nil, 1)
+				logError(log, "context deadline exceeded when reading bytes from openai transcriptions response", prod, err)
+
+				return false
+			}
+
+			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.read_bytes_error", nil, 1)
+			logError(log, "error when reading bytes from openai transcriptions response", prod, err)
+
+			apiErr := &goopenai.ErrorResponse{
+				Error: &goopenai.APIError{
+					Type:    "bricksllm_error",
+					Message: err.Error(),
+				},
+			}
+
+			errBytes, err := json.Marshal(apiErr)
+			if err != nil {
+				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.json_marshal_error", nil, 1)
+				logError(log, "error when marshalling bytes for openai streaming transcriptions error response", prod, err)
+				return false
+			}
+
+			ginCtx.SSEvent("", string(errBytes))
+			ginCtx.SSEvent("", " [DONE]")
+			return false
+		}
+		streamingResponse = append(streamingResponse, raw)
+
+		noSpaceLine := bytes.TrimSpace(raw)
+		if !bytes.HasPrefix(noSpaceLine, headerData) {
+			return true
+		}
+
+		noPrefixLine := bytes.TrimPrefix(noSpaceLine, headerData)
+		noPrefixLine = bytes.TrimSpace(noPrefixLine)
+		ginCtx.SSEvent("", " "+string(noPrefixLine))
+
+		if string(noPrefixLine) == "[DONE]" {
+			return false
+		}
+		chunk := &openai.TranscriptionStreamChunk{}
+		err = json.Unmarshal(noPrefixLine, chunk)
+		if err != nil {
+			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.completion_response_unmarshall_error", nil, 1)
+			logError(log, "error when unmarshalling openai transcriptions stream response", prod, err)
+		}
+		if err == nil {
+			textDelta := chunk.GetText()
+			if len(textDelta) > 0 {
+				content += textDelta
+			}
+			if chunk.IsDone() {
+				content = chunk.GetText()
+				streamCost, err = e.EstimateTranscriptionCost(0, model, &chunk.Usage)
+			}
+		}
+		return true
+	})
+	telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.streaming_latency", time.Since(start), nil, 1)
 }
 
 func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request) {
