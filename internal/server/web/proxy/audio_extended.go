@@ -26,9 +26,11 @@ const (
 )
 
 func processGPTTranscriptions(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model string) {
+	processGPTAudio(ginCtx, prod, client, e, model, transcriptionsUrl, "transcriptions")
 }
 
 func processGPTTranslations(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model string) {
+	processGPTAudio(ginCtx, prod, client, e, model, translationsUrl, "translations")
 }
 
 func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estimator, model, url, handler string) {
@@ -45,8 +47,8 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 
 	req, err := http.NewRequestWithContext(ctx, ginCtx.Request.Method, url, ginCtx.Request.Body)
 	if err != nil {
-		logError(log, "error when creating transcriptions openai http request", prod, err)
-		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to create openai transcriptions http request")
+		logError(log, "error when creating transcriptions/translation openai http request", prod, err)
+		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to create openai transcriptions/translation http request")
 		return
 	}
 
@@ -61,16 +63,16 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 	}
 
 	if !isStreaming {
-		modifyGPTTranscriptionsRequest(ginCtx, prod, log, req)
+		modifyGPTTranscriptionsRequest(ginCtx, prod, log, req, handler)
 	}
 
 	start := time.Now()
 	res, err := client.Do(req)
 	if err != nil {
-		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.http_client_error", nil, 1)
+		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.http_client_error", handler), nil, 1)
 
-		logError(log, "error when sending transcriptions request to openai", prod, err)
-		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to send transcriptions request to openai")
+		logError(log, "error when sending transcriptions/translation request to openai", prod, err)
+		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to send transcriptions/translation request to openai")
 		return
 	}
 
@@ -84,17 +86,17 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 
 	if res.StatusCode == http.StatusOK && !isStreaming {
 		dur := time.Since(start)
-		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.latency", dur, nil, 1)
+		telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.latency", handler), dur, nil, 1)
 		readBytes, err := io.ReadAll(res.Body)
 		if err != nil {
-			logError(log, "error when reading openai http transcriptions response body", prod, err)
+			logError(log, "error when reading openai http transcriptions/translation response body", prod, err)
 			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to read openai response body")
 			return
 		}
 		var cost float64 = 0
 		resp := &openai.TranscriptionResponse{}
-		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.success", nil, 1)
-		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.success_latency", dur, nil, 1)
+		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.success", handler), nil, 1)
+		telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.success_latency", handler), dur, nil, 1)
 
 		err = json.Unmarshal(readBytes, resp)
 		if err != nil {
@@ -104,7 +106,7 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 		if err == nil {
 			cost, err = e.EstimateTranscriptionCost(0, model, &resp.Usage)
 			if err != nil {
-				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.estimate_total_cost_error", nil, 1)
+				telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.estimate_total_cost_error", handler), nil, 1)
 				logError(log, "error when estimating openai cost", prod, err)
 			}
 		}
@@ -124,20 +126,20 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 
 	if res.StatusCode != http.StatusOK {
 		dur := time.Since(start)
-		telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.error_latency", dur, nil, 1)
-		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.error_response", nil, 1)
+		telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.error_latency", handler), dur, nil, 1)
+		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.error_response", handler), nil, 1)
 
 		readBytes, err := io.ReadAll(res.Body)
 		if err != nil {
-			logError(log, "error when reading openai transcriptions response body", prod, err)
-			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to read openai transcriptions response body")
+			logError(log, "error when reading openai transcriptions/translation response body", prod, err)
+			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] failed to read openai transcriptions/translation response body")
 			return
 		}
 
 		errorRes := &goopenai.ErrorResponse{}
 		err = json.Unmarshal(readBytes, errorRes)
 		if err != nil {
-			logError(log, "error when unmarshalling openai transcriptions error response body", prod, err)
+			logError(log, "error when unmarshalling openai transcriptions/translation error response body", prod, err)
 		}
 
 		logOpenAiError(log, prod, errorRes)
@@ -159,7 +161,7 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 		ginCtx.Set("costInUsd", streamCost)
 	}()
 
-	telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.streaming_response", nil, 1)
+	telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.streaming_response", handler), nil, 1)
 	ginCtx.Stream(func(w io.Writer) bool {
 		raw, err := buffer.ReadBytes('\n')
 		if err != nil {
@@ -168,14 +170,14 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 			}
 
 			if errors.Is(err, context.DeadlineExceeded) {
-				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.context_deadline_exceeded_error", nil, 1)
-				logError(log, "context deadline exceeded when reading bytes from openai transcriptions response", prod, err)
+				telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.context_deadline_exceeded_error", handler), nil, 1)
+				logError(log, "context deadline exceeded when reading bytes from openai transcriptions/translation response", prod, err)
 
 				return false
 			}
 
-			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.read_bytes_error", nil, 1)
-			logError(log, "error when reading bytes from openai transcriptions response", prod, err)
+			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.read_bytes_error", handler), nil, 1)
+			logError(log, "error when reading bytes from openai transcriptions/translation response", prod, err)
 
 			apiErr := &goopenai.ErrorResponse{
 				Error: &goopenai.APIError{
@@ -186,8 +188,8 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 
 			errBytes, err := json.Marshal(apiErr)
 			if err != nil {
-				telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.json_marshal_error", nil, 1)
-				logError(log, "error when marshalling bytes for openai streaming transcriptions error response", prod, err)
+				telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.json_marshal_error", handler), nil, 1)
+				logError(log, "error when marshalling bytes for openai streaming transcriptions/translation error response", prod, err)
 				return false
 			}
 
@@ -212,8 +214,8 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 		chunk := &openai.TranscriptionStreamChunk{}
 		err = json.Unmarshal(noPrefixLine, chunk)
 		if err != nil {
-			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.completion_response_unmarshall_error", nil, 1)
-			logError(log, "error when unmarshalling openai transcriptions stream response", prod, err)
+			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.completion_response_unmarshall_error", handler), nil, 1)
+			logError(log, "error when unmarshalling openai transcriptions/translation stream response", prod, err)
 		}
 		if err == nil {
 			textDelta := chunk.GetText()
@@ -227,10 +229,10 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 		}
 		return true
 	})
-	telemetry.Timing("bricksllm.proxy.get_transcriptions_handler.streaming_latency", time.Since(start), nil, 1)
+	telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.streaming_latency", handler), time.Since(start), nil, 1)
 }
 
-func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request) {
+func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request, handler string) {
 	var b bytes.Buffer
 	writer := multipart.NewWriter(&b)
 	defer writer.Close()
@@ -244,7 +246,7 @@ func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, 
 		"response_format": responseFormat,
 	})
 	if err != nil {
-		telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.write_field_to_buffer_error", nil, 1)
+		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.write_field_to_buffer_error", handler), nil, 1)
 		logError(log, "error when writing field to buffer", prod, err)
 		JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot write field to buffer")
 		return
@@ -256,25 +258,25 @@ func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, 
 	if form.File != nil {
 		fieldWriter, err := writer.CreateFormFile("file", form.File.Filename)
 		if err != nil {
-			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.create_transcription_file_error", nil, 1)
-			logError(log, "error when creating transcription file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot create transcription file")
+			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.create_transcription_file_error", handler), nil, 1)
+			logError(log, "error when creating transcriptions/translation file", prod, err)
+			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot create transcriptions/translation file")
 			return
 		}
 
 		opened, err := form.File.Open()
 		if err != nil {
-			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.open_transcription_file_error", nil, 1)
-			logError(log, "error when openning transcription file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot open transcription file")
+			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.open_transcription_file_error", handler), nil, 1)
+			logError(log, "error when openning transcriptions/translation file", prod, err)
+			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot open transcriptions/translation file")
 			return
 		}
 
 		_, err = io.Copy(fieldWriter, opened)
 		if err != nil {
-			telemetry.Incr("bricksllm.proxy.get_transcriptions_handler.copy_transcription_file_error", nil, 1)
-			logError(log, "error when copying transcription file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot copy transcription file")
+			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.copy_transcription_file_error", handler), nil, 1)
+			logError(log, "error when copying transcriptions/translation file", prod, err)
+			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot copy transcriptions/translation file")
 			return
 		}
 	}
