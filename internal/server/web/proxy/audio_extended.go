@@ -62,12 +62,12 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 		req.Header.Set("Connection", "keep-alive")
 	}
 
-	if !isStreaming {
-		err := modifyGPTTranscriptionsRequest(ginCtx, prod, log, req, handler)
-		if err != nil {
-			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] "+err.Error())
-			return
-		}
+	// Always rebuild the multipart body after PostForm drains it
+	// For non-streaming, we also modify response_format
+	err = modifyGPTTranscriptionsRequest(ginCtx, prod, log, req, handler, !isStreaming)
+	if err != nil {
+		JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] "+err.Error())
+		return
 	}
 
 	start := time.Now()
@@ -236,19 +236,23 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 	telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.streaming_latency", handler), time.Since(start), nil, 1)
 }
 
-func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request, handler string) error {
+func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request, handler string, modifyResponseFormat bool) error {
 	var b bytes.Buffer
 	writer := multipart.NewWriter(&b)
 	defer writer.Close()
 
-	responseFormat := c.PostForm("response_format")
-	if responseFormat == "text" {
-		responseFormat = "json"
+	overWrites := map[string]string{}
+
+	// Only modify response_format for non-streaming requests
+	if modifyResponseFormat {
+		responseFormat := c.PostForm("response_format")
+		if responseFormat == "text" {
+			responseFormat = "json"
+		}
+		overWrites["response_format"] = responseFormat
 	}
 
-	err := writePostFields(c, writer, map[string]string{
-		"response_format": responseFormat,
-	})
+	err := writePostFields(c, writer, overWrites)
 	if err != nil {
 		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.write_field_to_buffer_error", handler), nil, 1)
 		logError(log, "error when writing field to buffer", prod, err)
