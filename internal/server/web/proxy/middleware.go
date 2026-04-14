@@ -1003,6 +1003,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logCreateTranslationRequest(logWithCid, model, prompt, responseFormat, converted, prod, private)
 		}
 
+		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/videos") && c.Request.Method == http.MethodPost {
+			model := c.PostForm("model")
+			if model == "" {
+				vr := &openai.VideoRequest{}
+				err := json.Unmarshal(body, vr)
+				if err != nil {
+					logError(logWithCid, "error when unmarshalling video request", prod, err)
+				}
+				enrichedEvent.Request = vr
+				model = vr.Model
+			}
+			c.Set("model", model)
+		}
+
 		if len(kc.AllowedPaths) != 0 && !containsPath(kc.AllowedPaths, c.FullPath(), c.Request.Method) {
 			telemetry.Incr("bricksllm.proxy.get_middleware.path_not_allowed", nil, 1)
 			JSON(c, http.StatusForbidden, "[BricksLLM] path is not allowed")

@@ -98,11 +98,11 @@ type VideoResponseMetadata struct {
 	Seconds string `json:"seconds,omitempty"`
 }
 
-func (v *VideoResponseMetadata) GetSecondsAsFloat() float64 {
-	if secondsFloat, err := strconv.ParseFloat(v.Seconds, 64); err == nil {
-		return secondsFloat
+func (v *VideoResponseMetadata) GetSecondsAsFloat() (float64, error) {
+	if v.Seconds == "" {
+		return 0, strconv.ErrSyntax
 	}
-	return 0
+	return strconv.ParseFloat(v.Seconds, 64)
 }
 
 type TranscriptionResponseUsageInputTokenDetails struct {
@@ -145,4 +145,10 @@ func (c *TranscriptionStreamChunk) GetText() string {
 		return c.Delta
 	}
 	return c.Text
+}
+
+type VideoRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+	Size   string `json:"size"`
 }

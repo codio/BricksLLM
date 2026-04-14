@@ -63,7 +63,11 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 	}
 
 	if !isStreaming {
-		modifyGPTTranscriptionsRequest(ginCtx, prod, log, req, handler)
+		err := modifyGPTTranscriptionsRequest(ginCtx, prod, log, req, handler)
+		if err != nil {
+			JSON(ginCtx, http.StatusInternalServerError, "[BricksLLM] "+err.Error())
+			return
+		}
 	}
 
 	start := time.Now()
@@ -232,7 +236,7 @@ func processGPTAudio(ginCtx *gin.Context, prod bool, client http.Client, e estim
 	telemetry.Timing(fmt.Sprintf("bricksllm.proxy.get_%s_handler.streaming_latency", handler), time.Since(start), nil, 1)
 }
 
-func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request, handler string) {
+func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, req *http.Request, handler string) error {
 	var b bytes.Buffer
 	writer := multipart.NewWriter(&b)
 	defer writer.Close()
@@ -248,8 +252,7 @@ func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, 
 	if err != nil {
 		telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.write_field_to_buffer_error", handler), nil, 1)
 		logError(log, "error when writing field to buffer", prod, err)
-		JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot write field to buffer")
-		return
+		return fmt.Errorf("cannot write field to buffer: %w", err)
 	}
 
 	var form TransriptionForm
@@ -260,29 +263,27 @@ func modifyGPTTranscriptionsRequest(c *gin.Context, prod bool, log *zap.Logger, 
 		if err != nil {
 			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.create_transcription_file_error", handler), nil, 1)
 			logError(log, "error when creating transcriptions/translation file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot create transcriptions/translation file")
-			return
+			return fmt.Errorf("cannot create transcriptions/translation file: %w", err)
 		}
 
 		opened, err := form.File.Open()
 		if err != nil {
 			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.open_transcription_file_error", handler), nil, 1)
 			logError(log, "error when openning transcriptions/translation file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot open transcriptions/translation file")
-			return
+			return fmt.Errorf("cannot open transcriptions/translation file: %w", err)
 		}
 
 		_, err = io.Copy(fieldWriter, opened)
 		if err != nil {
 			telemetry.Incr(fmt.Sprintf("bricksllm.proxy.get_%s_handler.copy_transcription_file_error", handler), nil, 1)
 			logError(log, "error when copying transcriptions/translation file", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] cannot copy transcriptions/translation file")
-			return
+			return fmt.Errorf("cannot copy transcriptions/translation file: %w", err)
 		}
 	}
 
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Body = io.NopCloser(&b)
+	return nil
 }
 
 func writePostFields(c *gin.Context, writer *multipart.Writer, overWrites map[string]string) error {
