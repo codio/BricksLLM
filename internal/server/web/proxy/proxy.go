@@ -104,6 +104,15 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 	router.POST("/api/providers/openai/v1/audio/transcriptions", getTranscriptionsHandler(prod, client, e))
 	router.POST("/api/providers/openai/v1/audio/translations", getTranslationsHandler(prod, client, e))
 
+	// videos
+	router.POST("/api/providers/openai/v1/videos", getVideoHandler(prod, client, e))
+	router.POST("/api/providers/openai/v1/videos/edits", getVideoHandler(prod, client, e))
+	router.POST("/api/providers/openai/v1/videos/extensions", getVideoHandler(prod, client, e))
+	router.GET("/api/providers/openai/v1/videos/:video_id", getVideoHandler(prod, client, e))
+	router.DELETE("/api/providers/openai/v1/videos/:video_id", getVideoHandler(prod, client, e))
+	router.POST("/api/providers/openai/v1/videos/:video_id/remix", getVideoHandler(prod, client, e))
+	router.GET("/api/providers/openai/v1/videos/:video_id/content", getVideoHandler(prod, client, e))
+
 	// completions
 	router.POST("/api/providers/openai/v1/chat/completions", getChatCompletionHandler(prod, private, client, e))
 

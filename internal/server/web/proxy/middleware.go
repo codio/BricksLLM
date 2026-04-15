@@ -49,7 +49,7 @@ type keyStorage interface {
 }
 
 type estimator interface {
-	EstimateTranscriptionCost(secs float64, model string) (float64, error)
+	EstimateTranscriptionCost(secs float64, model string, usage *openai.TranscriptionResponseUsage) (float64, error)
 	EstimateSpeechCost(input string, model string) (float64, error)
 	EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error)
 	EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (float64, error)
@@ -61,6 +61,7 @@ type estimator interface {
 	EstimateResponseApiTotalCost(model string, usage responsesOpenai.ResponseUsage) (float64, error)
 	EstimateResponseApiToolCallsCost(tools []responsesOpenai.ToolUnion, model string) (float64, error)
 	EstimateResponseApiToolCreateContainerCost(req *openai.ResponseRequest) (float64, error)
+	EstimateVideoCost(metadata *openai.VideoResponseMetadata) (float64, error)
 }
 
 type azureEstimator interface {
@@ -1000,6 +1001,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 			converted, _ := strconv.ParseFloat(temperature, 64)
 			logCreateTranslationRequest(logWithCid, model, prompt, responseFormat, converted, prod, private)
+		}
+
+		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/videos") && c.Request.Method == http.MethodPost {
+			model := c.PostForm("model")
+			if model == "" {
+				vr := &openai.VideoRequest{}
+				err := json.Unmarshal(body, vr)
+				if err != nil {
+					logError(logWithCid, "error when unmarshalling video request", prod, err)
+				}
+				enrichedEvent.Request = vr
+				model = vr.Model
+			}
+			c.Set("model", model)
 		}
 
 		if len(kc.AllowedPaths) != 0 && !containsPath(kc.AllowedPaths, c.FullPath(), c.Request.Method) {

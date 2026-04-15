@@ -149,8 +149,33 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	},
 	"audio": {
 		"whisper-1": 0.006,
-		"tts-1":     0.015,
-		"tts-1-hd":  0.03,
+
+		"tts-1":    0.015,
+		"tts-1-hd": 0.03,
+
+		"gpt-4o-transcribe":         0.006,
+		"gpt-4o-transcribe-diarize": 0.006,
+		"gpt-4o-mini-transcribe":    0.003,
+
+		"gpt-4o-mini-tts": 0.012,
+	},
+	"transcription-input": {
+		"gpt-4o-transcribe":         0.0025,
+		"gpt-4o-transcribe-diarize": 0.0025,
+		"gpt-4o-mini-transcribe":    0.00125,
+	},
+	"transcription-output": {
+		"gpt-4o-transcribe":         0.01,
+		"gpt-4o-transcribe-diarize": 0.01,
+		"gpt-4o-mini-transcribe":    0.005,
+	},
+	"video": { // $ per sec
+		"sora-2":          0.1,
+		"sora-2-pro":      0.30,
+		"sora-2-720":      0.1,
+		"sora-2-pro-720":  0.30,
+		"sora-2-pro-1024": 0.5,
+		"sora-2-pro-1080": 0.7,
 	},
 	"completion": {
 		"gpt-image-1.5":        0.010,
@@ -511,40 +536,44 @@ func (ce *CostEstimator) EstimateImagesCost(model, quality, resolution string, m
 	if err == nil {
 		return mCost, nil
 	}
-	simpleRes, err := convertResToSimple(resolution)
-	if err != nil {
-		return 0, err
-	}
-	var normalizedModel string
-	switch model {
-	case "dall-e-2":
-		normalizedModel, err = prepareDallE2Model(simpleRes, model)
-		if err != nil {
-			return 0, err
-		}
-	case "dall-e-3":
-		normalizedModel, err = prepareDallE3Model(quality, simpleRes, model)
-		if err != nil {
-			return 0, err
-		}
-	case "gpt-image-1", "gpt-image-1.5", "chatgpt-image-latest", "gpt-image-1-mini":
-		normalizedModel, err = prepareGptImageModel(quality, simpleRes, model)
-		if err != nil {
-			return 0, err
-		}
-	default:
-		return 0, errors.New("model is not present in the images cost map")
-	}
 
 	costMap, ok := ce.tokenCostMap["images"]
 	if !ok {
 		return 0, errors.New("images cost map is not provided")
 	}
-	cost, ok := costMap[normalizedModel]
-	if !ok {
-		return 0, errors.New("model is not present in the images cost map")
+
+	// Try to prepare normalized model key with resolution/quality
+	simpleRes, resErr := convertResToSimple(resolution)
+	var normalizedModel string
+	var prepareErr error
+
+	if resErr == nil {
+		switch model {
+		case "dall-e-2":
+			normalizedModel, prepareErr = prepareDallE2Model(simpleRes, model)
+		case "dall-e-3":
+			normalizedModel, prepareErr = prepareDallE3Model(quality, simpleRes, model)
+		case "gpt-image-1", "gpt-image-1.5", "chatgpt-image-latest", "gpt-image-1-mini":
+			normalizedModel, prepareErr = prepareGptImageModel(quality, simpleRes, model)
+		default:
+			// Unknown model, will try model-only fallback
+			prepareErr = errors.New("unknown model type")
+		}
+
+		// If normalization succeeded, try the normalized key first
+		if prepareErr == nil {
+			if cost, ok := costMap[normalizedModel]; ok {
+				return cost, nil
+			}
+		}
 	}
-	return cost, nil
+
+	// Fall back to model-only lookup
+	if cost, ok := costMap[model]; ok {
+		return cost, nil
+	}
+
+	return 0, errors.New("model (with or without quality/resolution) is not present in the images cost map")
 }
 
 var allowedDallE2Resolutions = []string{"256", "512", "1024"}
@@ -649,7 +678,30 @@ func prepareGptImageQuality(quality string) (string, error) {
 	return quality, nil
 }
 
-func (ce *CostEstimator) EstimateTranscriptionCost(secs float64, model string) (float64, error) {
+func (ce *CostEstimator) EstimateTranscriptionCost(secs float64, model string, usage *TranscriptionResponseUsage) (float64, error) {
+	if usage != nil {
+		inputTokens := usage.InputTokens
+		costMap, ok := ce.tokenCostMap["transcription-input"]
+		if !ok {
+			return 0, errors.New("transcription input token cost map is not provided")
+		}
+		inputCost, ok := costMap[model]
+		if !ok {
+			return 0, errors.New("model is not present in the transcription input token cost map")
+		}
+
+		outputTokens := usage.OutputTokens
+		costMap, ok = ce.tokenCostMap["transcription-output"]
+		if !ok {
+			return 0, errors.New("transcription output token cost map is not provided")
+		}
+		outputCost, ok := costMap[model]
+		if !ok {
+			return 0, errors.New("model is not present in the transcription output token cost map")
+		}
+
+		return (float64(inputTokens)/1000)*inputCost + (float64(outputTokens)/1000)*outputCost, nil
+	}
 	costMap, ok := ce.tokenCostMap["audio"]
 	if !ok {
 		return 0, errors.New("audio cost map is not provided")
@@ -767,6 +819,55 @@ func (ce *CostEstimator) EstimateResponseApiToolCreateContainerCost(req *Respons
 		totalCost += cost
 	}
 	return totalCost, nil
+}
+
+func (ce *CostEstimator) EstimateVideoCost(metadata *VideoResponseMetadata) (float64, error) {
+	if metadata == nil {
+		return 0, errors.New("metadata is nil")
+	}
+	costMap, ok := ce.tokenCostMap["video"]
+	if !ok {
+		return 0, errors.New("video cost map is not provided")
+	}
+	model := metadata.Model
+
+	// Validate and get seconds as float
+	seconds, err := metadata.GetSecondsAsFloat()
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse seconds field: %w", err)
+	}
+
+	// Try model-size lookup first if size is present and can be normalized
+	size, err := normalizedVideoSize(metadata.Size)
+	if err == nil && size != "" {
+		costKey := fmt.Sprintf("%s-%s", model, size)
+		if cost, ok := costMap[costKey]; ok {
+			return cost * seconds, nil
+		}
+	}
+
+	// Fall back to model-only lookup
+	if cost, ok := costMap[model]; ok {
+		return cost * seconds, nil
+	}
+
+	return 0, errors.New("model (with or without size) is not present in the video cost map")
+}
+
+func normalizedVideoSize(size string) (string, error) {
+	if size == "" {
+		return "", nil
+	}
+	switch size {
+	case "720x1280", "1280x720":
+		return "720", nil
+	case "1024x1792", "1792x1024":
+		return "1024", nil
+	case "1080x1920", "1920x1080":
+		return "1080", nil
+	default:
+		return "", errors.New("size is not valid")
+	}
 }
 
 var reasoningModelPrefix = []string{"gpt-5", "o1", "o2", "o3"}

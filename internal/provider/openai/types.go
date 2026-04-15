@@ -1,5 +1,7 @@
 package openai
 
+import "strconv"
+
 type ResponseRequest struct {
 	Background         *bool                      `json:"background,omitzero"`
 	Conversation       *any                       `json:"conversation,omitzero"`
@@ -88,4 +90,65 @@ type ImageResponseMetadata struct {
 	Quality string             `json:"quality,omitempty"`
 	Size    string             `json:"size,omitempty"`
 	Usage   ImageResponseUsage `json:"usage,omitempty"`
+}
+
+type VideoResponseMetadata struct {
+	Model   string `json:"model,omitempty"`
+	Size    string `json:"size,omitempty"`
+	Seconds string `json:"seconds,omitempty"`
+}
+
+func (v *VideoResponseMetadata) GetSecondsAsFloat() (float64, error) {
+	if v.Seconds == "" {
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.ParseFloat(v.Seconds, 64)
+}
+
+type TranscriptionResponseUsageInputTokenDetails struct {
+	TextTokens  int `json:"text_tokens,omitempty"`
+	AudioTokens int `json:"audio_tokens,omitempty"`
+}
+type TranscriptionResponseUsage struct {
+	Type              string                                      `json:"type"`
+	TotalTokens       int                                         `json:"total_tokens,omitempty"`
+	InputTokens       int                                         `json:"input_tokens,omitempty"`
+	InputTokenDetails TranscriptionResponseUsageInputTokenDetails `json:"input_token_details,omitempty"`
+	OutputTokens      int                                         `json:"output_tokens,omitempty"`
+}
+type TranscriptionResponse struct {
+	Text  string                     `json:"text,omitempty"`
+	Usage TranscriptionResponseUsage `json:"usage,omitempty"`
+}
+
+type TranscriptionStreamChunk struct {
+	Type  string                     `json:"type"`
+	Delta string                     `json:"delta,omitempty"`
+	Text  string                     `json:"text,omitempty"`
+	Usage TranscriptionResponseUsage `json:"usage,omitempty"`
+}
+
+func (c *TranscriptionStreamChunk) IsDone() bool {
+	return c.Type == "transcript.text.done"
+}
+
+func (c *TranscriptionStreamChunk) IsDelta() bool {
+	return c.Type == "transcript.text.delta"
+}
+
+func (c *TranscriptionStreamChunk) IsSegment() bool {
+	return c.Type == "transcript.text.segment"
+}
+
+func (c *TranscriptionStreamChunk) GetText() string {
+	if c.IsDelta() {
+		return c.Delta
+	}
+	return c.Text
+}
+
+type VideoRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+	Size   string `json:"size"`
 }
