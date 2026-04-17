@@ -41,6 +41,17 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"chatgpt-image-latest": 0.005,
 		"gpt-image-1-mini":     0.002,
 
+		"gpt-5.4":      0.005,
+		"gpt-5.4-mini": 0.00075,
+		"gpt-5.4-nano": 0.0002,
+		"gpt-5.4-pro":  0.06,
+
+		"gpt-5.3-codex": 0.00175,
+
+		"gpt-5.2-codex": 0.00175,
+
+		"gpt-5.1-codex-mini": 0.00025,
+
 		"gpt-5.2-chat-latest":          0.001750,
 		"gpt-5.1-chat-latest":          0.001250,
 		"gpt-5.1-codex-max":            0.001250,
@@ -180,6 +191,17 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"completion": {
 		"gpt-image-1.5":        0.010,
 		"chatgpt-image-latest": 0.010,
+
+		"gpt-5.4":      0.0225,
+		"gpt-5.4-mini": 0.0045,
+		"gpt-5.4-nano": 0.00125,
+		"gpt-5.4-pro":  0.27,
+
+		"gpt-5.3-codex": 0.014,
+
+		"gpt-5.2-codex": 0.014,
+
+		"gpt-5.1-codex-mini": 0.002,
 
 		"gpt-5.2-chat-latest":          0.014000,
 		"gpt-5.1-chat-latest":          0.010000,
@@ -330,6 +352,11 @@ var AllowedTools = []string{
 	"file_search",
 	"function",
 	"computer_use_preview",
+	"exec_command",
+	"shell",
+	"local_shell",
+	"filesystem",
+	"patch",
 }
 
 type tokenCounter interface {
