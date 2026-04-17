@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -824,20 +823,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				return
 			}
 
-			hasNotAllowedTools := false
-			for _, tool := range responsesReq.Tools {
-				if !slices.Contains(openai.AllowedTools, tool.Type) {
-					hasNotAllowedTools = true
-					break
-				}
-			}
-
-			if hasNotAllowedTools {
-				telemetry.Incr("bricksllm.proxy.get_middleware.tool_not_allowed", nil, 1)
-				JSON(c, http.StatusForbidden, "[BricksLLM] one of the tools is not allowed")
-				c.Abort()
-				return
-			}
+			//hasNotAllowedTools := false
+			//for _, tool := range responsesReq.Tools {
+			//	if !slices.Contains(openai.AllowedTools, tool.Type) {
+			//		hasNotAllowedTools = true
+			//		break
+			//	}
+			//}
+			//
+			//if hasNotAllowedTools {
+			//	telemetry.Incr("bricksllm.proxy.get_middleware.tool_not_allowed", nil, 1)
+			//	JSON(c, http.StatusForbidden, "[BricksLLM] one of the tools is not allowed")
+			//	c.Abort()
+			//	return
+			//}
 
 			isCreateContainerTool := false
 			var containerMemLimit string
