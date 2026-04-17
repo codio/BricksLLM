@@ -353,6 +353,10 @@ var AllowedTools = []string{
 	"function",
 	"computer_use_preview",
 	"exec_command",
+	"shell",
+	"local_shell",
+	"filesystem",
+	"patch",
 }
 
 type tokenCounter interface {
