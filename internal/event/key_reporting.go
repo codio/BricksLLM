@@ -63,16 +63,14 @@ type UsageReportingRequest struct {
 }
 
 type UsageData struct {
-	LastDayUsage              float64 `json:"lastDayUsage"`
-	LastWeekUsage             float64 `json:"lastWeekUsage"`
-	LastMonthUsage            float64 `json:"lastMonthUsage"`
-	LastSixMonthUsage         float64 `json:"lastSixMonthUsage"`
-	TotalUsage                float64 `json:"totalUsage"`
-	LastDayUsageRequests      int     `json:"lastDayUsageRequests"`
-	LastWeekUsageRequests     int     `json:"lastWeekUsageRequests"`
-	LastMonthUsageRequests    int     `json:"lastMonthUsageRequests"`
-	LastSixMonthUsageRequests int     `json:"lastSixMonthUsageRequests"`
-	TotalUsageRequests        int     `json:"totalUsageRequests"`
+	LastDayUsage           float64 `json:"lastDayUsage"`
+	LastWeekUsage          float64 `json:"lastWeekUsage"`
+	LastMonthUsage         float64 `json:"lastMonthUsage"`
+	TotalUsage             float64 `json:"totalUsage"`
+	LastDayUsageRequests   int     `json:"lastDayUsageRequests"`
+	LastWeekUsageRequests  int     `json:"lastWeekUsageRequests"`
+	LastMonthUsageRequests int     `json:"lastMonthUsageRequests"`
+	TotalUsageRequests     int     `json:"totalUsageRequests"`
 }
 
 type UsageReportingResponse struct {
