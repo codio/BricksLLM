@@ -580,24 +580,25 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 	if len(tags) == 0 {
 		return nil, internal_errors.NewValidationError("key reporting request tag cannot be empty")
 	}
-	condition := "tags @> $1"
+	condition := "tags @> $1 AND created_at > $2"
 	nowTime := time.Now()
+	sixMonthsAgo := nowTime.Add(-6 * 30 * 24 * time.Hour).Unix()
 	dayAgo := nowTime.Add(-24 * time.Hour).Unix()
 	weekAgo := nowTime.Add(-7 * 24 * time.Hour).Unix()
 	monthAgo := nowTime.Add(-30 * 24 * time.Hour).Unix()
 
-	args := []any{pq.Array(tags), dayAgo, weekAgo, monthAgo}
+	args := []any{pq.Array(tags), sixMonthsAgo, dayAgo, weekAgo, monthAgo}
 
 	query := fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $2), 0) AS total_cost_in_usd_last_day,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $3), 0) AS total_cost_in_usd_last_week,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $4), 0) AS total_cost_in_usd_last_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $3), 0) AS total_cost_in_usd_last_day,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $4), 0) AS total_cost_in_usd_last_week,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $5), 0) AS total_cost_in_usd_last_month,
 			COALESCE(COUNT(*), 0) AS total_requests,
-			COALESCE(COUNT(*) FILTER (WHERE created_at > $2), 0) AS total_requests_last_day,
-			COALESCE(COUNT(*) FILTER (WHERE created_at > $3), 0) AS total_requests_last_week,
-			COALESCE(COUNT(*) FILTER (WHERE created_at > $4), 0) AS total_requests_last_month
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $3), 0) AS total_requests_last_day,
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $4), 0) AS total_requests_last_week,
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $5), 0) AS total_requests_last_month
 		FROM events
 		WHERE %s
 	`, condition)
@@ -607,11 +608,11 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 
 	data := &event.UsageData{}
 	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
-		&data.TotalUsage,
+		&data.LastSixMonthUsage,
 		&data.LastDayUsage,
 		&data.LastWeekUsage,
 		&data.LastMonthUsage,
-		&data.TotalUsageRequests,
+		&data.LastSixMonthUsageRequests,
 		&data.LastDayUsageRequests,
 		&data.LastWeekUsageRequests,
 		&data.LastMonthUsageRequests,
