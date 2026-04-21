@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/lib/pq"
 )
@@ -576,35 +577,30 @@ func (s *Store) GetTopKeyRingDataPoints(start, end int64, tags []string, order s
 }
 
 func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
+	if len(tags) == 0 {
+		return nil, internal_errors.NewValidationError("key reporting request tag cannot be empty")
+	}
+	condition := "tags @> $1"
 	nowTime := time.Now()
 	dayAgo := nowTime.Add(-24 * time.Hour).Unix()
 	weekAgo := nowTime.Add(-7 * 24 * time.Hour).Unix()
 	monthAgo := nowTime.Add(-30 * 24 * time.Hour).Unix()
 
-	args := []any{}
-	condition := ""
-
-	index := 1
-	if len(tags) > 0 {
-		condition += fmt.Sprintf(" tags @> $%d", index)
-
-		args = append(args, pq.Array(tags))
-		index++
-	}
+	args := []any{pq.Array(tags), dayAgo, weekAgo, monthAgo}
 
 	query := fmt.Sprintf(`
-	SELECT 
-		COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_day,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_week,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN cost_in_usd ELSE 0 END), 0) AS total_cost_in_usd_last_month,
-		COALESCE(SUM(1), 0) AS total_requests,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_day,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_week,
-		COALESCE(SUM(CASE WHEN created_at > %d THEN 1 ELSE 0 END), 0) AS total_requests_last_month
-	FROM events
-	WHERE %s
-	`, dayAgo, weekAgo, monthAgo, dayAgo, weekAgo, monthAgo, condition)
+		SELECT
+			COALESCE(SUM(cost_in_usd), 0) AS total_cost_in_usd,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $2), 0) AS total_cost_in_usd_last_day,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $3), 0) AS total_cost_in_usd_last_week,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at > $4), 0) AS total_cost_in_usd_last_month,
+			COALESCE(COUNT(*), 0) AS total_requests,
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $2), 0) AS total_requests_last_day,
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $3), 0) AS total_requests_last_week,
+			COALESCE(COUNT(*) FILTER (WHERE created_at > $4), 0) AS total_requests_last_month
+		FROM events
+		WHERE %s
+	`, condition)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -620,7 +616,7 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 		&data.LastWeekUsageRequests,
 		&data.LastMonthUsageRequests,
 	); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err

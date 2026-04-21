@@ -171,11 +171,11 @@ func (rm *ReportingManager) GetSpentKeyReporting(r *event.SpentKeyReportingReque
 
 func (rm *ReportingManager) GetUsageReporting(r *event.UsageReportingRequest) (*event.UsageReportingResponse, error) {
 	if r == nil {
-		return nil, internal_errors.NewValidationError("key reporting requst cannot be nil")
+		return nil, internal_errors.NewValidationError("key reporting request cannot be nil")
 	}
 	for _, tag := range r.Tags {
 		if len(tag) == 0 {
-			return nil, internal_errors.NewValidationError("key reporting requst tag cannot be empty")
+			return nil, internal_errors.NewValidationError("key reporting request tag cannot be empty")
 		}
 	}
 	usage, err := rm.es.GetUsageData(r.Tags)
