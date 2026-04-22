@@ -360,17 +360,27 @@ var OpenAiCodeInterpreterContainerCost = map[string]float64{
 var AllowedTools = []string{
 	"web_search",
 	"web_search_preview",
+	"web_search_preview_2025_03_11",
 
 	"code_interpreter",
 
 	"file_search",
 	"function",
 	"computer_use_preview",
+	"computer",
+	"computer_use",
 	"exec_command",
 	"shell",
-	"local_shell",
+	"apply_patch",
 	"filesystem",
 	"patch",
+	"namespace",
+	"custom",
+	"custom_code",
+	"mcp",
+	"tool_search",
+	"image_generation",
+	"skills",
 }
 
 type tokenCounter interface {
