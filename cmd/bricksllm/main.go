@@ -162,6 +162,8 @@ func main() {
 		log.Sugar().Fatalf("error creating user id for users table: %v", err)
 	}
 
+	go store.PrepareEventsIndexes(log)
+
 	cpMemStore, err := memdb.NewCustomProvidersMemDb(store, log, cfg.InMemoryDbUpdateInterval)
 	if err != nil {
 		log.Sugar().Fatalf("cannot initialize custom providers memdb: %v", err)
