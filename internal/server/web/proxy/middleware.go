@@ -827,7 +827,6 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			hasNotAllowedTools := false
 			for _, tool := range responsesReq.Tools {
 				if !slices.Contains(openai.AllowedTools, tool.Type) {
-					log.Sugar().Debugf("============= tool %s is not allowed", tool.Type)
 					hasNotAllowedTools = true
 					break
 				}
