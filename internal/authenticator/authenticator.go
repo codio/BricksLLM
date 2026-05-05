@@ -31,6 +31,7 @@ type routesManager interface {
 
 type keysCache interface {
 	GetKeyViaCache(hash string) (*key.ResponseKey, error)
+	GetKeyHashBySecondary(kHash string) (string, error)
 }
 
 type keyStorage interface {
@@ -206,6 +207,19 @@ func anonymize(input string) string {
 	return string(input[0:5]) + "**********************************************"
 }
 
+const secondaryPrefix = "secondary_"
+
+func (a *Authenticator) getHashViaSecondary(rawKey string) (string, error) {
+	if len(rawKey) > 0 && rawKey[0] != secondaryPrefix[0] {
+		return hasher.Hash(rawKey), nil
+	}
+	if !strings.HasPrefix(rawKey, secondaryPrefix) {
+		return hasher.Hash(rawKey), nil
+	}
+	hash := hasher.Hash(rawKey)
+	return a.kc.GetKeyHashBySecondary(hash)
+}
+
 func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProviderId string) (*key.ResponseKey, []*provider.Setting, error) {
 	var raw string
 	var err error
@@ -224,19 +238,20 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 		return nil, nil, err
 	}
 
-	hash := hasher.Hash(raw)
+	hash, err := a.getHashViaSecondary(raw)
 
-	key, err := a.kc.GetKeyViaCache(hash)
-	if key != nil {
+	rKey, err := a.kc.GetKeyViaCache(hash)
+	if rKey != nil {
 		telemetry.Incr(metricname.COUNTER_AUTHENTICATOR_FOUND_KEY_FROM_MEMDB, nil, 1)
 	}
 
-	if key == nil {
-		key, err = a.kc.GetKeyViaCache(raw)
+	if rKey == nil {
+		rKey, err = a.kc.GetKeyViaCache(raw)
 	}
 
 	if err != nil {
-		_, ok := err.(notFoundError)
+		var nFoundError notFoundError
+		ok := errors.As(err, &nFoundError)
 		if ok {
 			return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s is not found", anonymize(raw)))
 		}
@@ -244,11 +259,11 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 		return nil, nil, err
 	}
 
-	if key == nil {
+	if rKey == nil {
 		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s is not found", anonymize(raw)))
 	}
 
-	if key.Revoked {
+	if rKey.Revoked {
 		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s has been revoked", anonymize(raw)))
 	}
 
@@ -271,17 +286,17 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 		default:
 			return nil, nil, errors.New("invalid xCustomAuth location")
 		}
-		return key, settings, nil
+		return rKey, settings, nil
 	}
 
 	if strings.HasPrefix(req.URL.Path, "/api/routes") {
-		err = a.canKeyAccessCustomRoute(req.URL.Path, key.KeyId)
+		err = a.canKeyAccessCustomRoute(req.URL.Path, rKey.KeyId)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	settingIds := key.GetSettingIds()
+	settingIds := rKey.GetSettingIds()
 	allSettings := []*provider.Setting{}
 	selected := []*provider.Setting{}
 	for _, settingId := range settingIds {
@@ -308,7 +323,7 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 
 	if len(selected) != 0 {
 		used := selected[0]
-		if key.RotationEnabled {
+		if rKey.RotationEnabled {
 			used = selected[rand.Intn(len(selected))]
 		}
 
@@ -337,7 +352,7 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 			return nil, nil, err
 		}
 
-		return key, selected, nil
+		return rKey, selected, nil
 	}
 
 	return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("provider setting not found for key %s", raw))

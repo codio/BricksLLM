@@ -11,6 +11,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/key"
 	"github.com/bricks-cloud/bricksllm/internal/policy"
 	"github.com/bricks-cloud/bricksllm/internal/provider"
+	secondarykey "github.com/bricks-cloud/bricksllm/internal/secondary-key"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 )
@@ -26,6 +27,9 @@ type Storage interface {
 	GetProviderSettings(withSecret bool, ids []string) ([]*provider.Setting, error)
 	GetKey(keyId string) (*key.ResponseKey, error)
 	GetKeyByHash(hash string) (*key.ResponseKey, error)
+	GetKeyHashBySecondary(sHash string) (string, error)
+	CreateSecondaryKey(secondaryHash string) error
+	UpdateSecondaryKey(secondaryHash, keyHash string) error
 }
 
 type costLimitCache interface {
@@ -46,27 +50,35 @@ type keyCache interface {
 	Get(keyId string) (*key.ResponseKey, error)
 }
 
+type secondaryKeyCache interface {
+	Set(sHash string, value string, ttl time.Duration) error
+	Delete(sHash string) error
+	Get(sHash string) (string, error)
+}
+
 type requestsLimitStorage interface {
 	DeleteCounter(keyId string) error
 }
 
 type Manager struct {
-	s    Storage
-	clc  costLimitCache
-	rlc  rateLimitCache
-	ac   accessCache
-	kc   keyCache
-	rqls requestsLimitStorage
+	s           Storage
+	clc         costLimitCache
+	rlc         rateLimitCache
+	ac          accessCache
+	kc          keyCache
+	secondaryKC secondaryKeyCache
+	rqls        requestsLimitStorage
 }
 
-func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache, rqls requestsLimitStorage) *Manager {
+func NewManager(s Storage, clc costLimitCache, rlc rateLimitCache, ac accessCache, kc keyCache, secondaryKC secondaryKeyCache, rqls requestsLimitStorage) *Manager {
 	return &Manager{
-		s:    s,
-		clc:  clc,
-		rlc:  rlc,
-		ac:   ac,
-		kc:   kc,
-		rqls: rqls,
+		s:           s,
+		clc:         clc,
+		rlc:         rlc,
+		ac:          ac,
+		kc:          kc,
+		secondaryKC: secondaryKC,
+		rqls:        rqls,
 	}
 }
 
@@ -239,6 +251,59 @@ func (m *Manager) GetKeyViaCache(raw string) (*key.ResponseKey, error) {
 	}
 
 	return k, nil
+}
+
+func (m *Manager) GetKeyHashBySecondary(sHash string) (string, error) {
+	h, _ := m.secondaryKC.Get(sHash)
+	if h == "" {
+		telemetry.Incr("bricksllm.manager.get_key_hash_by_secondary.cache_miss", nil, 1)
+		stored, err := m.s.GetKeyHashBySecondary(sHash)
+		if err != nil {
+			return "", err
+		}
+		if stored == "" {
+			return "", errors.New("key hash not found")
+		}
+		err = m.secondaryKC.Set(sHash, stored, 24*time.Hour)
+		if err != nil {
+			telemetry.Incr("bricksllm.manager.get_key_hash_by_secondary.set_error", nil, 1)
+		}
+		h = stored
+	}
+	telemetry.Incr("bricksllm.manager.get_key_hash_by_secondary.cache_hit", nil, 1)
+	return h, nil
+}
+
+func (m *Manager) CreateSecondaryKey(keyCreate secondarykey.SecondaryKeyCreate) error {
+	if keyCreate.Key == "" {
+		return errors.New("key is required for creating secondary key")
+	}
+	return m.s.CreateSecondaryKey(hasher.Hash(keyCreate.Key))
+}
+
+func (m *Manager) UpdateSecondaryKey(keyUpdate secondarykey.SecondaryKeyUpdate) error {
+	if keyUpdate.Key == "" {
+		return errors.New("key is required for updating secondary key")
+	}
+	if keyUpdate.LinkedKeyId == "" {
+		return errors.New("linkedKeyId is required for updating secondary key")
+	}
+	rKey, err := m.s.GetKey(keyUpdate.LinkedKeyId)
+	if err != nil {
+		return err
+	}
+	if rKey == nil {
+		return errors.New("linked key not found for updating secondary key")
+	}
+	err = m.s.UpdateSecondaryKey(hasher.Hash(keyUpdate.Key), rKey.Key)
+	if err != nil {
+		return err
+	}
+	err = m.secondaryKC.Set(hasher.Hash(keyUpdate.Key), rKey.Key, 24*time.Hour)
+	if err != nil {
+		telemetry.Incr("bricksllm.manager.update_secondary_key.set_cache_error", nil, 1)
+	}
+	return nil
 }
 
 func (m *Manager) DeleteKey(id string) error {
