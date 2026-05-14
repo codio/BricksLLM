@@ -88,8 +88,8 @@ func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReporting
 	router.PATCH("/api/key-management/keys/:id", getUpdateKeyHandler(m, prod))
 	router.DELETE("/api/key-management/keys/:id", getDeleteKeyHandler(m, prod))
 
-	router.POST("/api/v2/key-management/secondary-keys", getCreateSecondaryKeyHandler(m, prod))
-	router.PATCH("/api/v2/key-management/secondary-keys/:id", getUpdateSecondaryKeyHandler(m, prod))
+	router.POST("/api/key-management/secondary-keys", getCreateSecondaryKeyHandler(m, prod))
+	router.PATCH("/api/key-management/secondary-keys", getUpdateSecondaryKeyHandler(m, prod))
 
 	router.GET("/api/reporting/keys/:id", getGetKeyReportingHandler(krm, prod))
 	router.POST("/api/reporting/events", getGetEventMetricsHandler(krm, prod))
