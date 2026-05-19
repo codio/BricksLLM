@@ -8,7 +8,7 @@ func (s *Store) InitializeSecondaryKeyTable() error {
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS secondary_keys (
 	    secondary_hash VARCHAR(255) PRIMARY KEY,
-	    key_hash VARCHAR(255),
+	    key_hash VARCHAR(255)
 	)`
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
