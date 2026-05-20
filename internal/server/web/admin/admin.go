@@ -649,7 +649,7 @@ func getCreateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 
 		telemetry.Incr("bricksllm.admin.get_create_secondary_key_handler.success", nil, 1)
 
-		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{})
 	}
 }
 
@@ -729,7 +729,7 @@ func getUpdateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 
 		telemetry.Incr("bricksllm.admin.get_update_secondary_key_handler.success", nil, 1)
 
-		c.Status(http.StatusOK)
+		c.JSON(http.StatusOK, gin.H{})
 	}
 }
 
