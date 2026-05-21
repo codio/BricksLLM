@@ -41,6 +41,13 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"chatgpt-image-latest": 0.005,
 		"gpt-image-1-mini":     0.002,
 
+		"gpt-5.5":           0.01,
+		"gpt-5.5~long":      0.01,
+		"gpt-5.5~short":     0.005,
+		"gpt-5.5-pro":       0.06,
+		"gpt-5.5-pro~long":  0.06,
+		"gpt-5.5-pro~short": 0.03,
+
 		"gpt-5.4":           0.005,
 		"gpt-5.4~long":      0.005,
 		"gpt-5.4~short":     0.0025,
@@ -115,6 +122,10 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"babbage-002":                  0.000400,
 	},
 	"cached-prompt": {
+		"gpt-5.5":       0.001,
+		"gpt-5.5~long":  0.001,
+		"gpt-5.5~short": 0.0005,
+
 		"gpt-5.4":       0.0005,
 		"gpt-5.4~long":  0.0005,
 		"gpt-5.4~short": 0.00025,
@@ -201,6 +212,13 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"completion": {
 		"gpt-image-1.5":        0.010,
 		"chatgpt-image-latest": 0.010,
+
+		"gpt-5.5":           0.045,
+		"gpt-5.5~long":      0.045,
+		"gpt-5.5~short":     0.03,
+		"gpt-5.5-pro":       0.27,
+		"gpt-5.5-pro~long":  0.27,
+		"gpt-5.5-pro~short": 0.18,
 
 		"gpt-5.4":           0.0225,
 		"gpt-5.4~long":      0.0225,
