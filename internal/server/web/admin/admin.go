@@ -583,12 +583,7 @@ func getCreateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 			dur := time.Since(start)
 			telemetry.Timing("bricksllm.admin.get_create_secondary_key_handler.latency", dur, nil, 1)
 		}()
-
-		//path := "/api/key-management/keys"
 		path := c.FullPath()
-		// TODO: DEBUG
-		fmt.Println("------------- full path: ", c.FullPath())
-
 		if c == nil || c.Request == nil {
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/empty-context",
@@ -663,12 +658,7 @@ func getUpdateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 			dur := time.Since(start)
 			telemetry.Timing("bricksllm.admin.get_update_secondary_key_handler.latency", dur, nil, 1)
 		}()
-
-		//path := "/api/key-management/keys"
 		path := c.FullPath()
-		// TODO: DEBUG
-		fmt.Println("------------- full path: ", c.FullPath())
-
 		if c == nil || c.Request == nil {
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/empty-context",
