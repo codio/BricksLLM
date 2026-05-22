@@ -269,6 +269,7 @@ func (m *Manager) GetKeyHashBySecondary(sHash string) (string, error) {
 			telemetry.Incr("bricksllm.manager.get_key_hash_by_secondary.set_error", nil, 1)
 		}
 		h = stored
+		return h, nil
 	}
 	telemetry.Incr("bricksllm.manager.get_key_hash_by_secondary.cache_hit", nil, 1)
 	return h, nil

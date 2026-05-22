@@ -239,6 +239,9 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	}
 
 	hash, err := a.getHashViaSecondary(raw)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	rKey, err := a.kc.GetKeyViaCache(hash)
 	if rKey != nil {

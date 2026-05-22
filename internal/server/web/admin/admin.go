@@ -685,7 +685,7 @@ func getUpdateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 		secondaryKeyUpdate := &secondarykey.SecondaryKeyUpdate{}
 		err = json.Unmarshal(data, secondaryKeyUpdate)
 		if err != nil {
-			logError(log, "error when unmarshalling secondary key creation request body", prod, err)
+			logError(log, "error when unmarshalling secondary key update request body", prod, err)
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/json-unmarshal",
 				Title:    "json unmarshaller error",

@@ -2,6 +2,8 @@ package postgresql
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 )
 
 func (s *Store) InitializeSecondaryKeyTable() error {
@@ -27,13 +29,20 @@ func (s *Store) GetKeyHashBySecondary(sHash string) (string, error) {
 
 	row := s.db.QueryRowContext(ctxTimeout, query, sHash)
 
-	var keyHash string
+	var keyHash sql.NullString
 	err := row.Scan(&keyHash)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", sql.ErrNoRows
+		}
 		return "", err
 	}
 
-	return keyHash, nil
+	if !keyHash.Valid {
+		return "", sql.ErrNoRows
+	}
+
+	return keyHash.String, nil
 }
 
 func (s *Store) CreateSecondaryKey(secondaryHash string) error {
@@ -47,11 +56,22 @@ func (s *Store) CreateSecondaryKey(secondaryHash string) error {
 }
 
 func (s *Store) UpdateSecondaryKey(secondaryHash, keyHash string) error {
-	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.rt)
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
 	defer cancel()
 
 	query := "UPDATE secondary_keys SET key_hash = $1 WHERE secondary_hash = $2"
 
-	_, err := s.db.ExecContext(ctxTimeout, query, keyHash, secondaryHash)
-	return err
+	result, err := s.db.ExecContext(ctxTimeout, query, keyHash, secondaryHash)
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+
 }
