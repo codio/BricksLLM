@@ -101,7 +101,6 @@ func (ce *CostEstimator) EstimatePromptCost(model string, tks int) (float64, err
 }
 
 func SelectModel(model string) string {
-	fmt.Printf("==== Input model: %q\n", model)
 	if strings.HasPrefix(model, "claude-sonnet-4.6") || strings.HasPrefix(model, "claude-sonnet-4-6") {
 		return "claude-sonnet-4.6"
 	}
