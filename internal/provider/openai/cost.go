@@ -1106,6 +1106,8 @@ func countTotalTokens(model string, r *goopenai.ChatCompletionRequest, tc tokenC
 }
 
 var modelWithLengthCtx = []string{
+	"gpt-5.5",
+	"gpt-5.5-pro",
 	"gpt-5.4",
 	"gpt-5.4-pro",
 }
