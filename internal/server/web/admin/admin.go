@@ -395,7 +395,6 @@ func getGetProviderSettingsHandler(m ProviderSettingsManager, prod bool) gin.Han
 
 func getCreateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("============== getCreateProviderSettingHandler called")
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.admin.get_create_provider_setting_handler.requests", nil, 1)
 
@@ -477,11 +476,7 @@ func getCreateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.H
 			})
 			return
 		}
-
 		telemetry.Incr("bricksllm.admin.get_create_provider_setting_handler.success", nil, 1)
-
-		fmt.Printf("================== created provider setting: %+v\n", created)
-
 		c.JSON(http.StatusOK, created)
 	}
 }
