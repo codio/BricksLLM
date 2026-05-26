@@ -723,7 +723,6 @@ func getUpdateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 
 func getUpdateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		fmt.Println("============== getUpdateProviderSettingHandler called")
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.admin.get_update_provider_setting_handler.requests", nil, 1)
 
@@ -817,11 +816,7 @@ func getUpdateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.H
 			})
 			return
 		}
-
 		telemetry.Incr("bricksllm.admin.get_update_provider_setting_handler.success", nil, 1)
-
-		fmt.Printf("================== updated provider setting: %+v\n", updated)
-
 		c.JSON(http.StatusOK, updated)
 	}
 }
