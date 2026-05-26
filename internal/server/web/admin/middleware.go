@@ -48,6 +48,7 @@ func getAdminLoggerMiddleware(log *zap.Logger, prefix string, prod bool, adminPa
 
 func getAdminSignRequestMiddleware(prod bool, xCodioSignSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Println("========== getAdminSignRequestMiddleware called")
 		log := util.GetLogFromCtx(c)
 
 		if !prod {
