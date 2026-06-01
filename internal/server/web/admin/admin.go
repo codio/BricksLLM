@@ -13,6 +13,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/policy"
 	"github.com/bricks-cloud/bricksllm/internal/provider"
 	"github.com/bricks-cloud/bricksllm/internal/provider/custom"
+	secondarykey "github.com/bricks-cloud/bricksllm/internal/secondary-key"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
@@ -31,6 +32,8 @@ type KeyManager interface {
 	GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset int, name, order string, returnCount bool) (*key.GetKeysResponse, error)
 	UpdateKey(id string, key *key.UpdateKey) (*key.ResponseKey, error)
 	CreateKey(key *key.RequestKey) (*key.ResponseKey, error)
+	CreateSecondaryKey(keyCreate secondarykey.SecondaryKeyCreate) error
+	UpdateSecondaryKey(keyUpdate secondarykey.SecondaryKeyUpdate) error
 	DeleteKey(id string) error
 }
 
@@ -84,6 +87,9 @@ func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReporting
 	router.PUT("/api/key-management/keys", getCreateKeyHandler(m, prod))
 	router.PATCH("/api/key-management/keys/:id", getUpdateKeyHandler(m, prod))
 	router.DELETE("/api/key-management/keys/:id", getDeleteKeyHandler(m, prod))
+
+	router.POST("/api/key-management/secondary-keys", getCreateSecondaryKeyHandler(m, prod))
+	router.PATCH("/api/key-management/secondary-keys", getUpdateSecondaryKeyHandler(m, prod))
 
 	router.GET("/api/reporting/keys/:id", getGetKeyReportingHandler(krm, prod))
 	router.POST("/api/reporting/events", getGetEventMetricsHandler(krm, prod))
@@ -470,9 +476,7 @@ func getCreateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.H
 			})
 			return
 		}
-
 		telemetry.Incr("bricksllm.admin.get_create_provider_setting_handler.success", nil, 1)
-
 		c.JSON(http.StatusOK, created)
 	}
 }
@@ -564,6 +568,156 @@ func getCreateKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 		telemetry.Incr("bricksllm.admin.get_create_key_handler.success", nil, 1)
 
 		c.JSON(http.StatusOK, resk)
+	}
+}
+
+func getCreateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_create_secondary_key_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_create_secondary_key_handler.latency", dur, nil, 1)
+		}()
+		path := c.FullPath()
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading secondary key creation request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+		secondaryKeyCreate := &secondarykey.SecondaryKeyCreate{}
+		err = json.Unmarshal(data, secondaryKeyCreate)
+		if err != nil {
+			logError(log, "error when unmarshalling secondary key creation request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		err = m.CreateSecondaryKey(*secondaryKeyCreate)
+		if err != nil {
+			errType := "internal"
+
+			defer func() {
+				telemetry.Incr("bricksllm.admin.get_create_secondary_key_handler.create_secondary_key_error", []string{
+					"error_type:" + errType,
+				}, 1)
+			}()
+
+			logError(log, "error when creating a secondary key", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/key-manager",
+				Title:    "secondary key creation error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_create_secondary_key_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, gin.H{})
+	}
+}
+
+func getUpdateSecondaryKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_update_secondary_key_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_update_secondary_key_handler.latency", dur, nil, 1)
+		}()
+		path := c.FullPath()
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading secondary key update request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+		secondaryKeyUpdate := &secondarykey.SecondaryKeyUpdate{}
+		err = json.Unmarshal(data, secondaryKeyUpdate)
+		if err != nil {
+			logError(log, "error when unmarshalling secondary key update request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		err = m.UpdateSecondaryKey(*secondaryKeyUpdate)
+		if err != nil {
+			errType := "internal"
+
+			defer func() {
+				telemetry.Incr("bricksllm.admin.get_update_secondary_key_handler.update_secondary_key_error", []string{
+					"error_type:" + errType,
+				}, 1)
+			}()
+
+			logError(log, "error when updating a secondary key", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/key-manager",
+				Title:    "secondary key updating error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_update_secondary_key_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, gin.H{})
 	}
 }
 
@@ -662,9 +816,7 @@ func getUpdateProviderSettingHandler(m ProviderSettingsManager, prod bool) gin.H
 			})
 			return
 		}
-
 		telemetry.Incr("bricksllm.admin.get_update_provider_setting_handler.success", nil, 1)
-
 		c.JSON(http.StatusOK, updated)
 	}
 }
