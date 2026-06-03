@@ -1266,7 +1266,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 		if ac.GetAccessStatus(kc.KeyId) {
 			telemetry.Incr("bricksllm.proxy.get_middleware.rate_limited", nil, 1)
-			JSON(c, http.StatusTooManyRequests, "[BricksLLM] too many requests")
+			JSON(c, http.StatusTooManyRequests, "[BricksLLM] You've reached your AI usage limit for this course. To continue, please contact your instructor or TA.")
 			c.Abort()
 			return
 		}
@@ -1304,7 +1304,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 				if uac.GetAccessStatus(us[0].Id) {
 					telemetry.Incr("bricksllm.proxy.get_middleware.user_rate_limited", nil, 1)
-					JSON(c, http.StatusTooManyRequests, fmt.Sprintf("[BricksLLM] too many requests for user: %s", userId))
+					JSON(c, http.StatusTooManyRequests, fmt.Sprintf("[BricksLLM] You've reached your AI usage limit for this course for user: %s. To continue, please contact your instructor or TA.", userId))
 					c.Abort()
 					return
 				}
