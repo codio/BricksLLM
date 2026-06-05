@@ -20,6 +20,13 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-sonnet-4":   3.0,
 
 		"claude-haiku-4-5": 1.0,
+
+		// old models
+		"claude-3-7-sonnet": 3.0,
+		"claude-3-5-haiku":  0.8,
+		"claude-3-haiku":    0.25,
+		"claude-3-5-sonnet": 3.0,
+		"claude-3-opus":     15.0,
 	},
 	"completion": {
 		"claude-opus-4-8": 25.0,
@@ -34,6 +41,13 @@ var AnthropicPerMillionTokenCost = map[string]map[string]float64{
 		"claude-sonnet-4":   15.0,
 
 		"claude-haiku-4-5": 5.0,
+
+		// old models
+		"claude-3-7-sonnet": 15.0,
+		"claude-3-5-haiku":  4.0,
+		"claude-3-haiku":    1.25,
+		"claude-3-5-sonnet": 15.0,
+		"claude-3-opus":     75.0,
 	},
 }
 
@@ -120,6 +134,23 @@ func SelectModel(model string) string {
 	}
 	if strings.HasPrefix(model, "claude-haiku-4-5") {
 		return "claude-haiku-4-5"
+	}
+
+	// old
+	if strings.HasPrefix(model, "claude-3-7-sonnet") {
+		return "claude-3-7-sonnet"
+	}
+	if strings.HasPrefix(model, "claude-3-5-haiku") {
+		return "claude-3-5-haiku"
+	}
+	if strings.HasPrefix(model, "claude-3-5-sonnet") {
+		return "claude-3-5-sonnet"
+	}
+	if strings.HasPrefix(model, "claude-3-opus") {
+		return "claude-3-opus"
+	}
+	if strings.HasPrefix(model, "claude-3-haiku") {
+		return "claude-3-haiku"
 	}
 	return model
 }
