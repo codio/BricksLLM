@@ -197,6 +197,8 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("removeUserAgent", removeUserAgent)
 		}
 
+		var blw *responseWriter
+
 		cid := util.NewUuid()
 		c.Set(util.STRING_CORRELATION_ID, cid)
 		logWithCid := log.With(zap.String(util.STRING_CORRELATION_ID, cid))
@@ -318,10 +320,6 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		kc, settings, err := a.AuthenticateHttpRequest(c.Request, c.Param(xcustom.XProviderIdParam))
-		if kc.ShouldLogResponse {
-			blw := &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
-			c.Writer = blw
-		}
 
 		enrichedEvent.Key = kc
 		_, ok := err.(notAuthorizedError)
@@ -352,6 +350,11 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 		c.Set("key", kc)
 		c.Set("settings", settings)
+
+		if kc.ShouldLogResponse {
+			blw = &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+			c.Writer = blw
+		}
 
 		if len(settings) >= 1 {
 			selected := settings[0]
@@ -1384,7 +1387,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				}
 			}
 
-			if !c.GetBool("stream") {
+			if !c.GetBool("stream") && blw != nil {
 				responseData := blw.body.Bytes()
 
 				if len(responseData) != 0 {
