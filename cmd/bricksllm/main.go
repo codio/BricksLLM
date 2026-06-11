@@ -37,6 +37,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const numEventConsumers = 16
+
 func main() {
 	modePtr := flag.String("m", "dev", "select the mode that bricksllm runs in")
 	privacyPtr := flag.String("p", "strict", "select the privacy mode that bricksllm runs in")
@@ -361,12 +363,12 @@ func main() {
 	c := cache.NewCache(apiCache)
 
 	messageBus := message.NewMessageBus()
-	eventMessageChan := make(chan message.Message)
+	eventMessageChan := make(chan message.Message, 1000)
 	messageBus.Subscribe("event", eventMessageChan)
 
 	handler := message.NewHandler(rec, log, ace, ce, vllme, aoe, v, uv, m, um, rlm, accessCache, userAccessCache)
 
-	eventConsumer := message.NewConsumer(eventMessageChan, log, 4, handler.HandleEventWithRequestAndResponse)
+	eventConsumer := message.NewConsumer(eventMessageChan, log, numEventConsumers, handler.HandleEventWithRequestAndResponse)
 	eventConsumer.StartEventMessageConsumers()
 
 	detector, err := amazon.NewClient(cfg.AmazonRequestTimeout, cfg.AmazonConnectionTimeout, log, cfg.AmazonRegion)

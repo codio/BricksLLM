@@ -197,9 +197,6 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("removeUserAgent", removeUserAgent)
 		}
 
-		blw := &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
-		c.Writer = blw
-
 		cid := util.NewUuid()
 		c.Set(util.STRING_CORRELATION_ID, cid)
 		logWithCid := log.With(zap.String(util.STRING_CORRELATION_ID, cid))
@@ -321,6 +318,11 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		kc, settings, err := a.AuthenticateHttpRequest(c.Request, c.Param(xcustom.XProviderIdParam))
+		if kc.ShouldLogResponse {
+			blw := &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+			c.Writer = blw
+		}
+
 		enrichedEvent.Key = kc
 		_, ok := err.(notAuthorizedError)
 		if ok {
