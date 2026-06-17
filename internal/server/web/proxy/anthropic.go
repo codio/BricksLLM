@@ -355,7 +355,7 @@ func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstim
 		model := c.GetString("model")
 
 		if !isStreaming && res.StatusCode == http.StatusOK {
-			dur := time.Now().Sub(start)
+			dur := time.Since(start)
 			telemetry.Timing("bricksllm.proxy.get_messages_handler.latency", dur, nil, 1)
 
 			bytes, err := io.ReadAll(res.Body)
