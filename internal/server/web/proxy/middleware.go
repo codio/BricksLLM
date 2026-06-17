@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+
 	"strconv"
 	"strings"
 	"time"
@@ -239,14 +240,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 
 			if len(metadata) != 0 {
-				data, err := json.Marshal(metadata)
-				if err != nil {
-					telemetry.Incr("bricksllm.proxy.get_middleware.json_marshal_metadata_err", nil, 1)
-				}
-
-				if err == nil {
-					metadataBytes = data
-				}
+				metadataBytes = []byte(metadata)
 			}
 
 			telemetry.Timing("bricksllm.proxy.get_middleware.proxy_latency_in_ms", dur, nil, 1)
@@ -837,13 +831,14 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			isCreateContainerTool := false
 			var containerMemLimit string
 			for _, tool := range responsesReq.Tools {
-				if !slices.Contains(openai.AllowedTools, tool.Type) {
+				if _, ok := openai.AllowedToolsSet[tool.Type]; !ok {
 					hasNotAllowedTools = true
+					break
 				}
 
-				if tool.GetContainerAsResponseRequestToolContainer() != nil {
+				if container := tool.GetContainerAsResponseRequestToolContainer(); container != nil {
 					isCreateContainerTool = true
-					containerMemLimit = tool.GetContainerAsResponseRequestToolContainer().GetMemoryLimit()
+					containerMemLimit = container.GetMemoryLimit()
 				}
 			}
 
@@ -1404,13 +1399,7 @@ type StreamingData struct {
 }
 
 func contains(arr []string, target string) bool {
-	for _, str := range arr {
-		if str == target {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(arr, target)
 }
 
 func isModelAllowed(model string, settings []*provider.Setting) bool {

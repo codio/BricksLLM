@@ -359,6 +359,10 @@ func init() {
 	for model := range OpenAiPerThousandTokenCost["images-tokens-input"] {
 		imageModelsWithTokensCost[model] = struct{}{}
 	}
+
+	for _, tool := range AllowedTools {
+		AllowedToolsSet[tool] = struct{}{}
+	}
 }
 
 var OpenAiPerThousandCallsToolCost = map[string]float64{
@@ -400,6 +404,8 @@ var AllowedTools = []string{
 	"image_generation",
 	"skills",
 }
+
+var AllowedToolsSet = map[string]struct{}{}
 
 type tokenCounter interface {
 	Count(model string, input string) (int, error)
