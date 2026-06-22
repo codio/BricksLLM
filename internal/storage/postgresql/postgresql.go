@@ -21,11 +21,11 @@ func NewStore(connStr string, wt time.Duration, rt time.Duration) (*Store, error
 		return nil, err
 	}
 
-	return &Store{
-		db: db,
-		wt: wt,
-		rt: rt,
-	}, nil
+	db.SetMaxOpenConns(25)
+	db.SetMaxIdleConns(16)
+	db.SetConnMaxLifetime(5 * time.Minute)
+
+	return &Store{db: db, wt: wt, rt: rt}, nil
 }
 
 type NullArray struct {
