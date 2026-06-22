@@ -91,13 +91,13 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 	router.Use(getTimeoutMiddleware(timeout))
 	router.Use(getMiddleware(cpm, rm, pm, a, prod, private, log, pub, "proxy", ac, uac, http.Client{}, scanner, cd, um, removeAgentHeaders))
 
+	baseTransport := http.DefaultTransport.(*http.Transport).Clone()
+	baseTransport.MaxIdleConns = 200
+	baseTransport.MaxIdleConnsPerHost = 100
+	baseTransport.IdleConnTimeout = 90 * time.Second
+	baseTransport.TLSHandshakeTimeout = 10 * time.Second
 	client := http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        200,
-			MaxIdleConnsPerHost: 100,
-			IdleConnTimeout:     90 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
-		},
+		Transport: baseTransport,
 	}
 
 	// health check
