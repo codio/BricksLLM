@@ -2,7 +2,7 @@ package anthropic
 
 import (
 	"encoding/json"
-	"fmt"
+	"strings"
 )
 
 type Metadata struct {
@@ -49,8 +49,41 @@ func (f *FlexContent) String() string {
 		return f.Text
 	}
 	if len(f.Raw) > 0 {
-		return fmt.Sprintf("%v", f.Raw)
+		var builder strings.Builder
+		for _, block := range f.Raw {
+			builder.WriteString(extractAnthropicContentText(block))
+		}
+		return builder.String()
 	}
+	return ""
+}
+
+func extractAnthropicContentText(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []any:
+		var builder strings.Builder
+		for _, item := range v {
+			builder.WriteString(extractAnthropicContentText(item))
+		}
+		return builder.String()
+	case map[string]any:
+		if text, ok := v["text"].(string); ok {
+			return text
+		}
+		if content, ok := v["content"].(string); ok {
+			return content
+		}
+		if raw, ok := v["raw"].([]any); ok {
+			var builder strings.Builder
+			for _, item := range raw {
+				builder.WriteString(extractAnthropicContentText(item))
+			}
+			return builder.String()
+		}
+	}
+
 	return ""
 }
 

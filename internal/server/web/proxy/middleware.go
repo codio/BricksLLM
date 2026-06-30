@@ -417,7 +417,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, cr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling anthropic completion request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling anthropic completion request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling anthropic completion request")
 				c.Abort()
 				return
 			}
@@ -444,7 +444,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, cr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling bedrock anthropic completion request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling bedrock anthropic completion request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling bedrock anthropic completion request")
 				c.Abort()
 				return
 			}
@@ -471,7 +471,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, mr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling anthropic messages request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling anthropic messages request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling anthropic messages request")
 				c.Abort()
 				return
 			}
@@ -496,7 +496,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, mr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling anthropic messages request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling anthropic messages request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling anthropic messages request")
 				c.Abort()
 				return
 			}
@@ -634,7 +634,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling vllm chat completions request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling vllm chat completions request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling vllm chat completions request")
 				c.Abort()
 				return
 			}
@@ -657,7 +657,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, cr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling vllm completions request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling vllm completions request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling vllm completions request")
 				c.Abort()
 				return
 			}
@@ -680,7 +680,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling deepinfra chat completions request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling deepinfra chat completions request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling deepinfra chat completions request")
 				c.Abort()
 				return
 			}
@@ -702,7 +702,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, cr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling deepinfra completions request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling deepinfra completions request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling deepinfra completions request")
 				c.Abort()
 				return
 			}
@@ -724,7 +724,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, er)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling deepinfra embeddings request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling deepinfra embeddings request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling deepinfra embeddings request")
 				c.Abort()
 				return
 			}
@@ -743,7 +743,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling azure openai chat completion request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling azure openai chat completion request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling azure openai chat completion request")
 				c.Abort()
 				return
 			}
@@ -766,7 +766,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, cr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling azure openai completions request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling azure openai completions request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling azure openai completions request")
 				c.Abort()
 				return
 			}
@@ -789,7 +789,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, er)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling azure openai embedding request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling azure openai embedding request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling azure openai embedding request")
 				c.Abort()
 				return
 			}
@@ -815,7 +815,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal([]byte(cleaned), ccr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling chat completion request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling chat completion request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling chat completion request")
 				c.Abort()
 				return
 			}
@@ -840,7 +840,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, responsesReq)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling openai responses request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling openai responses request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling openai responses request")
 				c.Abort()
 				return
 			}
@@ -906,7 +906,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err = json.Unmarshal(body, er)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling embedding request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling embedding request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling embedding request")
 				c.Abort()
 				return
 			}
@@ -926,7 +926,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err := json.Unmarshal(body, ir)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling create image request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling create image request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling create image request")
 				c.Abort()
 				return
 			}
@@ -947,7 +947,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err := json.Unmarshal(body, ier)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling edit image request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling edit image request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling edit image request")
 				c.Abort()
 				return
 			}
@@ -977,7 +977,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err := json.Unmarshal(body, ir)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling image variations request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling image variations request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling image variations request")
 				c.Abort()
 				return
 			}
@@ -1006,7 +1006,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			err := json.Unmarshal(body, sr)
 			if err != nil {
 				logError(logWithCid, "error when unmarshalling create speech request", prod, err)
-				JSON(c, http.StatusInternalServerError, "[BricksLLM] error when unmarshalling create speech request")
+				JSON(c, http.StatusBadRequest, "[BricksLLM] error when unmarshalling create speech request")
 				c.Abort()
 				return
 			}
