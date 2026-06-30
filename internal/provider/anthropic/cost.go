@@ -198,7 +198,7 @@ func (ce *CostEstimator) CountMessagesTokens(messages []Message) int {
 	count := 0
 
 	for _, message := range messages {
-		count += ce.tc.Count(message.Content) + anthropicMessageOverhead
+		count += ce.tc.Count(message.Content.String()) + anthropicMessageOverhead
 	}
 
 	return count + anthropicMessageOverhead
