@@ -1,5 +1,10 @@
 package anthropic
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 type Metadata struct {
 	UserId string `json:"user_id"`
 }
@@ -16,9 +21,75 @@ type CompletionRequest struct {
 	Stream            bool      `json:"stream,omitempty"`
 }
 
+type FlexContent struct {
+	Text string
+	Raw  []interface{}
+}
+
+func (f *FlexContent) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		f.Text = s
+		return nil
+	}
+
+	var arr []interface{}
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	f.Raw = arr
+	return nil
+}
+
+func (f *FlexContent) String() string {
+	if f == nil {
+		return ""
+	}
+	if f.Text != "" {
+		return f.Text
+	}
+	if len(f.Raw) > 0 {
+		var builder strings.Builder
+		for _, block := range f.Raw {
+			builder.WriteString(extractAnthropicContentText(block))
+		}
+		return builder.String()
+	}
+	return ""
+}
+
+func extractAnthropicContentText(value any) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []any:
+		var builder strings.Builder
+		for _, item := range v {
+			builder.WriteString(extractAnthropicContentText(item))
+		}
+		return builder.String()
+	case map[string]any:
+		if text, ok := v["text"].(string); ok {
+			return text
+		}
+		if content, ok := v["content"].(string); ok {
+			return content
+		}
+		if raw, ok := v["raw"].([]any); ok {
+			var builder strings.Builder
+			for _, item := range raw {
+				builder.WriteString(extractAnthropicContentText(item))
+			}
+			return builder.String()
+		}
+	}
+
+	return ""
+}
+
 type Message struct {
-	Content string `json:"content"`
-	Role    string `json:"role"`
+	Content FlexContent `json:"content"`
+	Role    string      `json:"role"`
 }
 
 type MessagesRequest struct {

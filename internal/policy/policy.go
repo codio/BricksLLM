@@ -438,7 +438,7 @@ func (p *Policy) Filter(client http.Client, input any, scanner Scanner, cd Custo
 
 		contents := []string{}
 		for _, message := range converted.Messages {
-			contents = append(contents, message.Content)
+			contents = append(contents, message.Content.String())
 		}
 
 		result, err := p.scan(contents, scanner, cd, log)
@@ -460,7 +460,7 @@ func (p *Policy) Filter(client http.Client, input any, scanner Scanner, cd Custo
 
 		for index, c := range result.Updated {
 			newMessages = append(newMessages, anthropic.Message{
-				Content: c,
+				Content: anthropic.FlexContent{Text: c},
 				Role:    converted.Messages[index].Role,
 			})
 		}
