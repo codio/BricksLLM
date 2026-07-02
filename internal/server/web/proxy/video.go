@@ -116,7 +116,6 @@ func getVideoHandler(prod bool, client http.Client, e estimator) gin.HandlerFunc
 		}
 		ginCtx.Set("costInUsd", cost)
 		ginCtx.Data(res.StatusCode, res.Header.Get("Content-Type"), bytes)
-		return
 	}
 }
 

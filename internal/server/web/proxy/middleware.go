@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"slices"
+
 	"strconv"
 	"strings"
 	"time"
@@ -133,13 +134,13 @@ type publisher interface {
 	Publish(message.Message)
 }
 
-func getProvider(c *gin.Context) string {
+func getProvider(c *gin.Context, fullPath string) string {
 	existing := c.GetString("provider")
 	if len(existing) != 0 {
 		return existing
 	}
 
-	parts := strings.Split(c.FullPath(), "/")
+	parts := strings.Split(fullPath, "/")
 
 	spaceRemoved := []string{}
 
@@ -149,17 +150,17 @@ func getProvider(c *gin.Context) string {
 		}
 	}
 
-	if strings.HasPrefix(c.FullPath(), "/api/providers/") {
+	if strings.HasPrefix(fullPath, "/api/providers/") {
 		if len(spaceRemoved) >= 3 {
 			return spaceRemoved[2]
 		}
 	}
 
-	if strings.HasPrefix(c.FullPath(), "/api/custom/providers/") {
+	if strings.HasPrefix(fullPath, "/api/custom/providers/") {
 		return c.Param("provider")
 	}
 
-	if strings.HasPrefix(c.FullPath(), "/api/routes/") {
+	if strings.HasPrefix(fullPath, "/api/routes/") {
 		return c.Param("provider")
 	}
 
@@ -188,7 +189,10 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			return
 		}
 
-		if c.FullPath() == "/api/health" {
+		fullPath := c.FullPath()
+		method := c.Request.Method
+
+		if fullPath == "/api/health" {
 			c.Abort()
 			return
 		}
@@ -197,8 +201,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("removeUserAgent", removeUserAgent)
 		}
 
-		blw := &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
-		c.Writer = blw
+		var blw *responseWriter
 
 		cid := util.NewUuid()
 		c.Set(util.STRING_CORRELATION_ID, cid)
@@ -225,7 +228,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			latency := int(dur.Milliseconds())
 
 			if !prod {
-				logWithCid.Sugar().Infof("%s | %d | %s | %s | %dms", prefix, c.Writer.Status(), c.Request.Method, c.FullPath(), latency)
+				logWithCid.Sugar().Infof("%s | %d | %s | %s | %dms", prefix, c.Writer.Status(), method, fullPath, latency)
 			}
 
 			keyId := ""
@@ -237,27 +240,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 
 			if len(metadata) != 0 {
-				data, err := json.Marshal(metadata)
-				if err != nil {
-					telemetry.Incr("bricksllm.proxy.get_middleware.json_marshal_metadata_err", nil, 1)
-				}
-
-				if err == nil {
-					metadataBytes = data
-				}
+				metadataBytes = []byte(metadata)
 			}
 
 			telemetry.Timing("bricksllm.proxy.get_middleware.proxy_latency_in_ms", dur, nil, 1)
 
-			selectedProvider := getProvider(c)
+			selectedProvider := getProvider(c, fullPath)
 
 			if prod {
 				logWithCid.Info("response to proxy",
 					zap.String("provider", selectedProvider),
 					zap.String("keyId", keyId),
 					zap.Int("code", c.Writer.Status()),
-					zap.String("method", c.Request.Method),
-					zap.String("path", c.FullPath()),
+					zap.String("method", method),
+					zap.String("path", fullPath),
 					zap.Int("lantecyInMs", latency),
 				)
 			}
@@ -279,7 +275,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				CompletionTokenCount: c.GetInt("completionTokenCount"),
 				LatencyInMs:          latency,
 				Path:                 c.Request.URL.Path,
-				Method:               c.Request.Method,
+				Method:               method,
 				CustomId:             customId,
 				Request:              requestBytes,
 				Response:             responseBytes,
@@ -313,7 +309,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			})
 		}()
 
-		if len(c.FullPath()) == 0 {
+		if len(fullPath) == 0 {
 			telemetry.Incr("bricksllm.proxy.get_middleware.route_does_not_exist", nil, 1)
 			JSON(c, http.StatusNotFound, "[BricksLLM] route not supported")
 			c.Abort()
@@ -321,6 +317,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		}
 
 		kc, settings, err := a.AuthenticateHttpRequest(c.Request, c.Param(xcustom.XProviderIdParam))
+
 		enrichedEvent.Key = kc
 		_, ok := err.(notAuthorizedError)
 		if ok {
@@ -351,6 +348,11 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 		c.Set("key", kc)
 		c.Set("settings", settings)
 
+		if kc.ShouldLogResponse {
+			blw = &responseWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+			c.Writer = blw
+		}
+
 		if len(settings) >= 1 {
 			selected := settings[0]
 
@@ -359,13 +361,13 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				c.Set("cost_map", selected.CostMap)
 			}
 
-			if strings.HasPrefix(c.FullPath(), "/api/providers/azure/openai") {
+			if strings.HasPrefix(fullPath, "/api/providers/azure/openai") {
 				if selected != nil && len(selected.Setting["resourceName"]) != 0 {
 					c.Set("resourceName", selected.Setting["resourceName"])
 				}
 			}
 
-			if strings.HasPrefix(c.FullPath(), "/api/providers/bedrock/anthropic") {
+			if strings.HasPrefix(fullPath, "/api/providers/bedrock/anthropic") {
 				if selected != nil && len(selected.Setting["awsAccessKeyId"]) != 0 {
 					c.Set("awsAccessKeyId", selected.Setting["awsAccessKeyId"])
 				}
@@ -379,7 +381,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				}
 			}
 
-			if strings.HasPrefix(c.FullPath(), "/api/providers/vllm") {
+			if strings.HasPrefix(fullPath, "/api/providers/vllm") {
 				if selected != nil && len(selected.Setting["url"]) != 0 {
 					c.Set("vllmUrl", selected.Setting["url"])
 				}
@@ -406,11 +408,11 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("requestBytes", requestBytes)
 		}
 
-		if c.Request.Method != http.MethodGet {
+		if method != http.MethodGet {
 			c.Request.Body = io.NopCloser(bytes.NewReader(body))
 		}
 
-		if c.FullPath() == "/api/providers/anthropic/v1/complete" {
+		if fullPath == "/api/providers/anthropic/v1/complete" {
 			logCompletionRequest(logWithCid, body, prod, private)
 
 			cr := &anthropic.CompletionRequest{}
@@ -437,7 +439,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = cr
 		}
 
-		if c.FullPath() == "/api/providers/bedrock/anthropic/v1/complete" {
+		if fullPath == "/api/providers/bedrock/anthropic/v1/complete" {
 			logCompletionRequest(logWithCid, body, prod, private)
 
 			cr := &anthropic.CompletionRequest{}
@@ -464,7 +466,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = cr
 		}
 
-		if c.FullPath() == "/api/providers/bedrock/anthropic/v1/messages" {
+		if fullPath == "/api/providers/bedrock/anthropic/v1/messages" {
 			logCreateMessageRequest(logWithCid, body, prod, private)
 
 			mr := &anthropic.MessagesRequest{}
@@ -489,7 +491,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = mr
 		}
 
-		if c.FullPath() == "/api/providers/anthropic/v1/messages" {
+		if fullPath == "/api/providers/anthropic/v1/messages" {
 			logCreateMessageRequest(logWithCid, body, prod, private)
 
 			mr := &anthropic.MessagesRequest{}
@@ -514,7 +516,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = mr
 		}
 
-		if strings.HasPrefix(c.FullPath(), "/api/custom/providers/:provider") {
+		if strings.HasPrefix(fullPath, "/api/custom/providers/:provider") {
 			providerName := c.Param("provider")
 
 			rc := cpm.GetRouteConfigFromMem(providerName, c.Param("wildcard"))
@@ -552,19 +554,20 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 
 			// c.Set("promptTokenCount", tks)
 
-			result := gjson.Get(string(body), rc.StreamLocation)
+			bodyStr := string(body)
+			result := gjson.Get(bodyStr, rc.StreamLocation)
 
 			if result.IsBool() {
 				c.Set("stream", result.Bool())
 			}
 
-			result = gjson.Get(string(body), rc.ModelLocation)
+			result = gjson.Get(bodyStr, rc.ModelLocation)
 			if len(result.Str) != 0 {
 				c.Set("model", result.Str)
 			}
 		}
 
-		if strings.HasPrefix(c.FullPath(), "/api/routes") {
+		if strings.HasPrefix(fullPath, "/api/routes") {
 			r := c.Param("route")
 			rc := rm.GetRouteFromMemDb(r)
 
@@ -629,7 +632,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/vllm/v1/chat/completions" {
+		if fullPath == "/api/providers/vllm/v1/chat/completions" {
 			ccr := &vllm.ChatRequest{}
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
@@ -652,7 +655,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = ccr
 		}
 
-		if c.FullPath() == "/api/providers/vllm/v1/completions" {
+		if fullPath == "/api/providers/vllm/v1/completions" {
 			cr := &vllm.CompletionRequest{}
 			err = json.Unmarshal(body, cr)
 			if err != nil {
@@ -675,7 +678,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = cr
 		}
 
-		if c.FullPath() == "/api/providers/deepinfra/v1/chat/completions" {
+		if fullPath == "/api/providers/deepinfra/v1/chat/completions" {
 			ccr := &vllm.ChatRequest{}
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
@@ -697,7 +700,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = ccr
 		}
 
-		if c.FullPath() == "/api/providers/deepinfra/v1/completions" {
+		if fullPath == "/api/providers/deepinfra/v1/completions" {
 			cr := &vllm.CompletionRequest{}
 			err = json.Unmarshal(body, cr)
 			if err != nil {
@@ -719,7 +722,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = cr
 		}
 
-		if c.FullPath() == "/api/providers/deepinfra/v1/embeddings" {
+		if fullPath == "/api/providers/deepinfra/v1/embeddings" {
 			er := &goopenai.EmbeddingRequest{}
 			err = json.Unmarshal(body, er)
 			if err != nil {
@@ -738,7 +741,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = er
 		}
 
-		if c.FullPath() == "/api/providers/azure/openai/deployments/:deployment_id/chat/completions" {
+		if fullPath == "/api/providers/azure/openai/deployments/:deployment_id/chat/completions" {
 			ccr := &goopenai.ChatCompletionRequest{}
 			err = json.Unmarshal(body, ccr)
 			if err != nil {
@@ -761,7 +764,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = ccr
 		}
 
-		if c.FullPath() == "/api/providers/azure/openai/deployments/:deployment_id/completions" {
+		if fullPath == "/api/providers/azure/openai/deployments/:deployment_id/completions" {
 			cr := &goopenai.CompletionRequest{}
 			err = json.Unmarshal(body, cr)
 			if err != nil {
@@ -784,7 +787,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = cr
 		}
 
-		if c.FullPath() == "/api/providers/azure/openai/deployments/:deployment_id/embeddings" {
+		if fullPath == "/api/providers/azure/openai/deployments/:deployment_id/embeddings" {
 			er := &goopenai.EmbeddingRequest{}
 			err = json.Unmarshal(body, er)
 			if err != nil {
@@ -804,7 +807,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = er
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/chat/completions" {
+		if fullPath == "/api/providers/openai/v1/chat/completions" {
 			ccr := &goopenai.ChatCompletionRequest{}
 			// this is a hack around an open issue in go-openai.
 			// https://github.com/sashabaranov/go-openai/issues/884
@@ -835,7 +838,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = ccr
 		}
 
-		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/responses") {
+		if strings.HasPrefix(fullPath, "/api/providers/openai/v1/responses") {
 			responsesReq := &openai.ResponseRequest{}
 			err = json.Unmarshal(body, responsesReq)
 			if err != nil {
@@ -855,10 +858,17 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 
 			hasNotAllowedTools := false
+			isCreateContainerTool := false
+			var containerMemLimit string
 			for _, tool := range responsesReq.Tools {
-				if !slices.Contains(openai.AllowedTools, tool.Type) {
+				if _, ok := openai.AllowedToolsSet[tool.Type]; !ok {
 					hasNotAllowedTools = true
 					break
+				}
+
+				if container := tool.GetContainerAsResponseRequestToolContainer(); container != nil {
+					isCreateContainerTool = true
+					containerMemLimit = container.GetMemoryLimit()
 				}
 			}
 
@@ -869,15 +879,6 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				return
 			}
 
-			isCreateContainerTool := false
-			var containerMemLimit string
-			for _, tool := range responsesReq.Tools {
-				if tool.GetContainerAsResponseRequestToolContainer() != nil {
-					isCreateContainerTool = true
-					containerMemLimit = tool.GetContainerAsResponseRequestToolContainer().GetMemoryLimit()
-					break
-				}
-			}
 			if isCreateContainerTool {
 				_, ok := openai.OpenAiCodeInterpreterContainerCost[containerMemLimit]
 				if !ok {
@@ -901,7 +902,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = responsesReq
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/embeddings" {
+		if fullPath == "/api/providers/openai/v1/embeddings" {
 			er := &goopenai.EmbeddingRequest{}
 			err = json.Unmarshal(body, er)
 			if err != nil {
@@ -921,7 +922,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			policyInput = er
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/images/generations" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/images/generations" && method == http.MethodPost {
 			ir := &goopenai.ImageRequest{}
 			err := json.Unmarshal(body, ir)
 			if err != nil {
@@ -942,7 +943,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logCreateImageRequest(logWithCid, ir, prod, private)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/images/edits" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/images/edits" && method == http.MethodPost {
 			ier := &goopenai.ImageEditRequest{}
 			err := json.Unmarshal(body, ier)
 			if err != nil {
@@ -972,7 +973,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logEditImageRequest(logWithCid, prompt, model, n, size, responseFormat, user, prod, private)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/images/variations" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/images/variations" && method == http.MethodPost {
 			ir := &goopenai.ImageVariRequest{}
 			err := json.Unmarshal(body, ir)
 			if err != nil {
@@ -1001,7 +1002,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logImageVariationsRequest(logWithCid, model, n, size, responseFormat, user, prod)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/audio/speech" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/audio/speech" && method == http.MethodPost {
 			sr := &goopenai.CreateSpeechRequest{}
 			err := json.Unmarshal(body, sr)
 			if err != nil {
@@ -1018,7 +1019,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logCreateSpeechRequest(logWithCid, sr, prod, private)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/audio/transcriptions" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/audio/transcriptions" && method == http.MethodPost {
 			model := c.PostForm("model")
 			language := c.PostForm("language")
 			prompt := c.PostForm("prompt")
@@ -1031,7 +1032,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logCreateTranscriptionRequest(logWithCid, model, language, prompt, responseFormat, converted, prod, private)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/audio/translations" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/audio/translations" && method == http.MethodPost {
 			model := c.PostForm("model")
 			prompt := c.PostForm("prompt")
 			responseFormat := c.PostForm("response_format")
@@ -1043,7 +1044,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			logCreateTranslationRequest(logWithCid, model, prompt, responseFormat, converted, prod, private)
 		}
 
-		if strings.HasPrefix(c.FullPath(), "/api/providers/openai/v1/videos") && c.Request.Method == http.MethodPost {
+		if strings.HasPrefix(fullPath, "/api/providers/openai/v1/videos") && method == http.MethodPost {
 			model := c.PostForm("model")
 			if model == "" {
 				vr := &openai.VideoRequest{}
@@ -1057,7 +1058,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Set("model", model)
 		}
 
-		if len(kc.AllowedPaths) != 0 && !containsPath(kc.AllowedPaths, c.FullPath(), c.Request.Method) {
+		if len(kc.AllowedPaths) != 0 && !containsPath(kc.AllowedPaths, fullPath, method) {
 			telemetry.Incr("bricksllm.proxy.get_middleware.path_not_allowed", nil, 1)
 			JSON(c, http.StatusForbidden, "[BricksLLM] path is not allowed")
 			c.Abort()
@@ -1071,7 +1072,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			c.Abort()
 			return
 		}
-		if !isModelSupported(c.FullPath(), model) {
+		if !isModelSupported(fullPath, model) {
 			telemetry.Incr("bricksllm.proxy.get_middleware.model_not_supported", nil, 1)
 			JSON(c, http.StatusBadRequest, "[BricksLLM] model is not supported")
 			c.Abort()
@@ -1103,7 +1104,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			qm["before"] = val
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/assistants" && method == http.MethodPost {
 			logCreateAssistantRequest(logWithCid, body, prod, private)
 
 			ar := &goopenai.AssistantRequest{}
@@ -1120,39 +1121,39 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id" && method == http.MethodGet {
 			logRetrieveAssistantRequest(logWithCid, prod, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id" && method == http.MethodPost {
 			logModifyAssistantRequest(logWithCid, body, prod, private, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id" && c.Request.Method == http.MethodDelete {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id" && method == http.MethodDelete {
 			logDeleteAssistantRequest(logWithCid, prod, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/assistants" && method == http.MethodGet {
 			logListAssistantsRequest(logWithCid, prod)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id/files" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id/files" && method == http.MethodPost {
 			logCreateAssistantFileRequest(logWithCid, body, prod, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id/files/:file_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id/files/:file_id" && method == http.MethodGet {
 			logRetrieveAssistantFileRequest(logWithCid, prod, fid, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id/files/:file_id" && c.Request.Method == http.MethodDelete {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id/files/:file_id" && method == http.MethodDelete {
 			logDeleteAssistantFileRequest(logWithCid, prod, fid, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/assistants/:assistant_id/files" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/assistants/:assistant_id/files" && method == http.MethodGet {
 			logListAssistantFilesRequest(logWithCid, prod, aid, qm)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads" && method == http.MethodPost {
 			logCreateThreadRequest(logWithCid, body, prod, private)
 
 			tr := &openai.ThreadRequest{}
@@ -1167,19 +1168,19 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id" && method == http.MethodGet {
 			logRetrieveThreadRequest(logWithCid, prod, tid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id" && method == http.MethodPost {
 			logModifyThreadRequest(logWithCid, body, prod, tid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id" && c.Request.Method == http.MethodDelete {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id" && method == http.MethodDelete {
 			logDeleteThreadRequest(logWithCid, prod, tid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages" && method == http.MethodPost {
 			logCreateMessageRequest(logWithCid, body, prod, private)
 
 			mr := &openai.MessageRequest{}
@@ -1193,27 +1194,27 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id" && method == http.MethodGet {
 			logRetrieveMessageRequest(logWithCid, prod, mid, tid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id" && method == http.MethodPost {
 			logModifyMessageRequest(logWithCid, body, prod, private, tid, mid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages" && method == http.MethodGet {
 			logListMessagesRequest(logWithCid, prod, aid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id/files/:file_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id/files/:file_id" && method == http.MethodGet {
 			logRetrieveMessageFileRequest(logWithCid, prod, mid, tid, fid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id/files" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/messages/:message_id/files" && method == http.MethodGet {
 			logListMessageFilesRequest(logWithCid, prod, tid, mid, qm)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs" && method == http.MethodPost {
 			logCreateRunRequest(logWithCid, body, prod, private)
 
 			rr := &goopenai.RunRequest{}
@@ -1228,27 +1229,27 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id" && method == http.MethodGet {
 			logRetrieveRunRequest(logWithCid, prod, tid, rid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id" && method == http.MethodPost {
 			logModifyRunRequest(logWithCid, body, prod, tid, rid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs" && method == http.MethodGet {
 			logListRunsRequest(logWithCid, prod, tid, qm)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/submit_tool_outputs" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/submit_tool_outputs" && method == http.MethodPost {
 			logSubmitToolOutputsRequest(logWithCid, body, prod, tid, rid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/cancel" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/cancel" && method == http.MethodPost {
 			logCancelARunRequest(logWithCid, prod, tid, rid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/runs" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/threads/runs" && method == http.MethodPost {
 			logCreateThreadAndRunRequest(logWithCid, body, prod, private)
 
 			r := &openai.CreateThreadAndRunRequest{}
@@ -1263,44 +1264,44 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 			}
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/steps/:step_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/steps/:step_id" && method == http.MethodGet {
 			logRetrieveRunStepRequest(logWithCid, prod, tid, rid, sid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/steps" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/threads/:thread_id/runs/:run_id/steps" && method == http.MethodGet {
 			logListRunStepsRequest(logWithCid, prod, tid, rid, qm)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/moderations" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/moderations" && method == http.MethodPost {
 			logCreateModerationRequest(logWithCid, body, prod, private)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/models/:model" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/models/:model" && method == http.MethodGet {
 			logRetrieveModelRequest(logWithCid, prod, md)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/models/:model" && c.Request.Method == http.MethodDelete {
+		if fullPath == "/api/providers/openai/v1/models/:model" && method == http.MethodDelete {
 			logDeleteModelRequest(logWithCid, prod, md)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/files" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/files" && method == http.MethodGet {
 			logListFilesRequest(logWithCid, prod, qm)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/files" && c.Request.Method == http.MethodPost {
+		if fullPath == "/api/providers/openai/v1/files" && method == http.MethodPost {
 			purpose := c.PostForm("purpose")
 			logUploadFileRequest(logWithCid, prod, purpose)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/files/:file_id" && c.Request.Method == http.MethodDelete {
+		if fullPath == "/api/providers/openai/v1/files/:file_id" && method == http.MethodDelete {
 			logDeleteFileRequest(logWithCid, prod, fid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/files/:file_id" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/files/:file_id" && method == http.MethodGet {
 			logRetrieveFileRequest(logWithCid, prod, fid)
 		}
 
-		if c.FullPath() == "/api/providers/openai/v1/files/:file_id/content" && c.Request.Method == http.MethodGet {
+		if fullPath == "/api/providers/openai/v1/files/:file_id/content" && method == http.MethodGet {
 			logRetrieveFileContentRequest(logWithCid, prod, fid)
 		}
 
@@ -1335,9 +1336,9 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 					return
 				}
 
-				if len(us[0].AllowedPaths) != 0 && !containsPath(us[0].AllowedPaths, c.FullPath(), c.Request.Method) {
+				if len(us[0].AllowedPaths) != 0 && !containsPath(us[0].AllowedPaths, fullPath, method) {
 					telemetry.Incr("bricksllm.proxy.get_middleware.user_requested_path_not_allowed", nil, 1)
-					JSON(c, http.StatusForbidden, fmt.Sprintf("[BricksLLM] path: %s forbidden for user: %s", c.FullPath(), userId))
+					JSON(c, http.StatusForbidden, fmt.Sprintf("[BricksLLM] path: %s forbidden for user: %s", fullPath, userId))
 					c.Abort()
 					return
 				}
@@ -1422,7 +1423,7 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 				}
 			}
 
-			if !c.GetBool("stream") {
+			if !c.GetBool("stream") && blw != nil {
 				responseData := blw.body.Bytes()
 
 				if len(responseData) != 0 {
@@ -1438,13 +1439,7 @@ type StreamingData struct {
 }
 
 func contains(arr []string, target string) bool {
-	for _, str := range arr {
-		if str == target {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(arr, target)
 }
 
 func isModelAllowed(model string, settings []*provider.Setting) bool {
