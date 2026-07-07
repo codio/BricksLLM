@@ -267,7 +267,7 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	}
 
 	if rKey.Revoked {
-		return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("key %s has been revoked", anonymize(raw)))
+		return nil, nil, internal_errors.NewAuthError("You've reached your AI usage limit for this course. To continue, please contact your instructor or TA.")
 	}
 
 	if xcustom.IsXCustomRequest(req) {
