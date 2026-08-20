@@ -310,6 +310,7 @@ const (
 	MinuteTimeUnit TimeUnit = "m"
 	SecondTimeUnit TimeUnit = "s"
 	DayTimeUnit    TimeUnit = "d"
+	WeekTimeUnit   TimeUnit = "w"
 	MonthTimeUnit  TimeUnit = "mo"
 )
 

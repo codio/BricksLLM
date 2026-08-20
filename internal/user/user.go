@@ -123,7 +123,7 @@ func (u *User) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if u.CostLimitInUsdUnit != key.DayTimeUnit && u.CostLimitInUsdUnit != key.HourTimeUnit && u.CostLimitInUsdUnit != key.MonthTimeUnit && u.CostLimitInUsdUnit != key.MinuteTimeUnit {
+		if u.CostLimitInUsdUnit != key.DayTimeUnit && u.CostLimitInUsdUnit != key.HourTimeUnit && u.CostLimitInUsdUnit != key.WeekTimeUnit && u.CostLimitInUsdUnit != key.MonthTimeUnit && u.CostLimitInUsdUnit != key.MinuteTimeUnit {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
@@ -246,7 +246,7 @@ func (uu *UpdateUser) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if *uu.CostLimitInUsdOverTime != 0 && *uu.CostLimitInUsdUnit != key.DayTimeUnit && *uu.CostLimitInUsdUnit != key.HourTimeUnit && *uu.CostLimitInUsdUnit != key.MonthTimeUnit && *uu.CostLimitInUsdUnit != key.MinuteTimeUnit {
+		if *uu.CostLimitInUsdOverTime != 0 && *uu.CostLimitInUsdUnit != key.DayTimeUnit && *uu.CostLimitInUsdUnit != key.HourTimeUnit && *uu.CostLimitInUsdUnit != key.WeekTimeUnit && *uu.CostLimitInUsdUnit != key.MonthTimeUnit && *uu.CostLimitInUsdUnit != key.MinuteTimeUnit {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
