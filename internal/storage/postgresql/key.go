@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/bricks-cloud/bricksllm/internal/event"
 	"strings"
+
+	"github.com/bricks-cloud/bricksllm/internal/event"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/key"
@@ -57,7 +58,7 @@ func (s *Store) AlterKeysTable() error {
 			END IF;
 		END
 		$$;
-		ALTER TABLE keys ADD COLUMN IF NOT EXISTS setting_id VARCHAR(255), ADD COLUMN IF NOT EXISTS allowed_paths JSONB, ADD COLUMN IF NOT EXISTS setting_ids VARCHAR(255)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(255)[], ADD COLUMN IF NOT EXISTS should_log_request BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS should_log_response BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS rotation_enabled BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS policy_id VARCHAR(255) NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS is_key_not_hashed BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS requests_limit INT NOT NULL DEFAULT 0;
+		ALTER TABLE keys ADD COLUMN IF NOT EXISTS setting_id VARCHAR(255), ADD COLUMN IF NOT EXISTS allowed_paths JSONB, ADD COLUMN IF NOT EXISTS setting_ids VARCHAR(255)[] NOT NULL DEFAULT ARRAY[]::VARCHAR(255)[], ADD COLUMN IF NOT EXISTS should_log_request BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS should_log_response BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS rotation_enabled BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS policy_id VARCHAR(255) NOT NULL DEFAULT '', ADD COLUMN IF NOT EXISTS is_key_not_hashed BOOLEAN NOT NULL DEFAULT FALSE, ADD COLUMN IF NOT EXISTS requests_limit INT NOT NULL DEFAULT 0, ADD COLUMN IF NOT EXISTS extended_budget_limit JSONB;
 	`
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -191,6 +192,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -317,6 +319,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -397,6 +400,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
+		&k.ExtendedBudgetLimit,
 	)
 
 	if err != nil {
@@ -462,6 +466,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -559,6 +564,7 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -625,6 +631,7 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -686,6 +693,7 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
+			&k.ExtendedBudgetLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -792,6 +800,12 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		counter++
 	}
 
+	if uk.ExtendedBudgetLimit != nil {
+		values = append(values, *uk.ExtendedBudgetLimit)
+		fields = append(fields, fmt.Sprintf("extended_budget_limit = $%d", counter))
+		counter++
+	}
+
 	if uk.ShouldLogRequest != nil {
 		values = append(values, *uk.ShouldLogRequest)
 		fields = append(fields, fmt.Sprintf("should_log_request = $%d", counter))
@@ -865,6 +879,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
+		&k.ExtendedBudgetLimit,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, internal_errors.NewNotFoundError(fmt.Sprintf("key not found for id: %s", id))
@@ -889,8 +904,8 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 
 func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 	query := `
-		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, key_ring, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed, requests_limit)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+		INSERT INTO keys (name, created_at, updated_at, tags, revoked, key_id, key, revoked_reason, cost_limit_in_usd, cost_limit_in_usd_over_time, cost_limit_in_usd_unit, rate_limit_over_time, rate_limit_unit, ttl, key_ring, setting_id, allowed_paths, setting_ids, should_log_request, should_log_response, rotation_enabled, policy_id, is_key_not_hashed, requests_limit, extended_budget_limit)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 		RETURNING *;
 	`
 
@@ -924,6 +939,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		rk.PolicyId,
 		rk.IsKeyNotHashed,
 		rk.RequestsLimit,
+		rk.ExtendedBudgetLimit,
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -958,6 +974,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
+		&k.ExtendedBudgetLimit,
 	); err != nil {
 		return nil, err
 	}

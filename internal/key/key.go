@@ -3,6 +3,7 @@ package key
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -11,27 +12,37 @@ import (
 
 const RevokedReasonExpired string = "expired"
 
+type ExtendedBudgetLimitItem struct {
+	LimitInUsdOverTime float64  `json:"costLimitOverTime"`
+	LimitInUsdUnit     TimeUnit `json:"unit"`
+}
+
+type ExtendedBudgetLimit struct {
+	Items []ExtendedBudgetLimitItem `json:"items"`
+}
+
 type UpdateKey struct {
-	Name                   string        `json:"name"`
-	UpdatedAt              int64         `json:"updatedAt"`
-	Tags                   []string      `json:"tags"`
-	Revoked                *bool         `json:"revoked"`
-	RevokedReason          string        `json:"revokedReason"`
-	Key                    string        `json:"key"`
-	SettingId              string        `json:"settingId"`
-	SettingIds             []string      `json:"settingIds"`
-	CostLimitInUsd         *float64      `json:"costLimitInUsd"`
-	CostLimitInUsdOverTime *float64      `json:"costLimitInUsdOverTime"`
-	CostLimitInUsdUnit     *TimeUnit     `json:"costLimitInUsdUnit"`
-	RateLimitOverTime      *int          `json:"rateLimitOverTime"`
-	RateLimitUnit          *TimeUnit     `json:"rateLimitUnit"`
-	RequestsLimit          *int          `json:"requestsLimit"`
-	AllowedPaths           *[]PathConfig `json:"allowedPaths,omitempty"`
-	ShouldLogRequest       *bool         `json:"shouldLogRequest"`
-	ShouldLogResponse      *bool         `json:"shouldLogResponse"`
-	RotationEnabled        *bool         `json:"rotationEnabled"`
-	PolicyId               *string       `json:"policyId"`
-	IsKeyNotHashed         *bool         `json:"isKeyNotHashed"`
+	Name                   string               `json:"name"`
+	UpdatedAt              int64                `json:"updatedAt"`
+	Tags                   []string             `json:"tags"`
+	Revoked                *bool                `json:"revoked"`
+	RevokedReason          string               `json:"revokedReason"`
+	Key                    string               `json:"key"`
+	SettingId              string               `json:"settingId"`
+	SettingIds             []string             `json:"settingIds"`
+	CostLimitInUsd         *float64             `json:"costLimitInUsd"`
+	CostLimitInUsdOverTime *float64             `json:"costLimitInUsdOverTime"`
+	CostLimitInUsdUnit     *TimeUnit            `json:"costLimitInUsdUnit"`
+	RateLimitOverTime      *int                 `json:"rateLimitOverTime"`
+	RateLimitUnit          *TimeUnit            `json:"rateLimitUnit"`
+	RequestsLimit          *int                 `json:"requestsLimit"`
+	AllowedPaths           *[]PathConfig        `json:"allowedPaths,omitempty"`
+	ShouldLogRequest       *bool                `json:"shouldLogRequest"`
+	ShouldLogResponse      *bool                `json:"shouldLogResponse"`
+	RotationEnabled        *bool                `json:"rotationEnabled"`
+	PolicyId               *string              `json:"policyId"`
+	IsKeyNotHashed         *bool                `json:"isKeyNotHashed"`
+	ExtendedBudgetLimit    *ExtendedBudgetLimit `json:"extendedBudgetLimit"`
 }
 
 func (uk *UpdateKey) Validate() error {
@@ -125,7 +136,7 @@ func (uk *UpdateKey) Validate() error {
 			return internal_errors.NewValidationError("rate limit unit can not be empty if rate limit over time is specified")
 		}
 
-		if *uk.RateLimitOverTime != 0 && *uk.RateLimitUnit != HourTimeUnit && *uk.RateLimitUnit != MinuteTimeUnit && *uk.RateLimitUnit != SecondTimeUnit && *uk.RateLimitUnit != DayTimeUnit {
+		if *uk.RateLimitOverTime != 0 && !slices.Contains(AllowedTimeUnits, *uk.RateLimitUnit) {
 			return internal_errors.NewValidationError("rate limit unit can not be identified")
 		}
 	}
@@ -143,7 +154,7 @@ func (uk *UpdateKey) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if *uk.CostLimitInUsdOverTime != 0 && *uk.CostLimitInUsdUnit != DayTimeUnit && *uk.CostLimitInUsdUnit != HourTimeUnit && *uk.CostLimitInUsdUnit != MonthTimeUnit && *uk.CostLimitInUsdUnit != MinuteTimeUnit {
+		if *uk.CostLimitInUsdOverTime != 0 && !slices.Contains(AllowedTimeUnits, *uk.CostLimitInUsdUnit) {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
@@ -157,28 +168,29 @@ type PathConfig struct {
 }
 
 type RequestKey struct {
-	Name                   string       `json:"name"`
-	CreatedAt              int64        `json:"createdAt"`
-	UpdatedAt              int64        `json:"updatedAt"`
-	Tags                   []string     `json:"tags"`
-	KeyId                  string       `json:"keyId"`
-	Key                    string       `json:"key"`
-	CostLimitInUsd         float64      `json:"costLimitInUsd"`
-	CostLimitInUsdOverTime float64      `json:"costLimitInUsdOverTime"`
-	CostLimitInUsdUnit     TimeUnit     `json:"costLimitInUsdUnit"`
-	RateLimitOverTime      int          `json:"rateLimitOverTime"`
-	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
-	Ttl                    string       `json:"ttl"`
-	KeyRing                string       `json:"keyRing"`
-	SettingId              string       `json:"settingId"`
-	AllowedPaths           []PathConfig `json:"allowedPaths"`
-	SettingIds             []string     `json:"settingIds"`
-	ShouldLogRequest       bool         `json:"shouldLogRequest"`
-	ShouldLogResponse      bool         `json:"shouldLogResponse"`
-	RotationEnabled        bool         `json:"rotationEnabled"`
-	PolicyId               string       `json:"policyId"`
-	IsKeyNotHashed         bool         `json:"isKeyNotHashed"`
-	RequestsLimit          int          `json:"requestsLimit"`
+	Name                   string               `json:"name"`
+	CreatedAt              int64                `json:"createdAt"`
+	UpdatedAt              int64                `json:"updatedAt"`
+	Tags                   []string             `json:"tags"`
+	KeyId                  string               `json:"keyId"`
+	Key                    string               `json:"key"`
+	CostLimitInUsd         float64              `json:"costLimitInUsd"`
+	CostLimitInUsdOverTime float64              `json:"costLimitInUsdOverTime"`
+	CostLimitInUsdUnit     TimeUnit             `json:"costLimitInUsdUnit"`
+	RateLimitOverTime      int                  `json:"rateLimitOverTime"`
+	RateLimitUnit          TimeUnit             `json:"rateLimitUnit"`
+	Ttl                    string               `json:"ttl"`
+	KeyRing                string               `json:"keyRing"`
+	SettingId              string               `json:"settingId"`
+	AllowedPaths           []PathConfig         `json:"allowedPaths"`
+	SettingIds             []string             `json:"settingIds"`
+	ShouldLogRequest       bool                 `json:"shouldLogRequest"`
+	ShouldLogResponse      bool                 `json:"shouldLogResponse"`
+	RotationEnabled        bool                 `json:"rotationEnabled"`
+	PolicyId               string               `json:"policyId"`
+	IsKeyNotHashed         bool                 `json:"isKeyNotHashed"`
+	RequestsLimit          int                  `json:"requestsLimit"`
+	ExtendedBudgetLimit    *ExtendedBudgetLimit `json:"extendedBudgetLimit"`
 }
 
 func (rk *RequestKey) Validate() error {
@@ -285,7 +297,7 @@ func (rk *RequestKey) Validate() error {
 			return internal_errors.NewValidationError("rate limit unit can not be empty if rate limit over time is specified")
 		}
 
-		if rk.RateLimitUnit != HourTimeUnit && rk.RateLimitUnit != MinuteTimeUnit && rk.RateLimitUnit != SecondTimeUnit && rk.RateLimitUnit != DayTimeUnit {
+		if !slices.Contains(AllowedTimeUnits, rk.RateLimitUnit) {
 			return internal_errors.NewValidationError("rate limit unit can not be identified")
 		}
 	}
@@ -295,11 +307,33 @@ func (rk *RequestKey) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if rk.CostLimitInUsdUnit != DayTimeUnit && rk.CostLimitInUsdUnit != HourTimeUnit && rk.CostLimitInUsdUnit != MonthTimeUnit && rk.CostLimitInUsdUnit != MinuteTimeUnit {
+		if !slices.Contains(AllowedTimeUnits, rk.CostLimitInUsdUnit) {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
+	if err := validateExtendedBudgetLimit(rk.ExtendedBudgetLimit); err != nil {
+		return err
+	}
+	return nil
+}
 
+func validateExtendedBudgetLimit(ebl *ExtendedBudgetLimit) error {
+	if ebl == nil {
+		return nil
+	}
+	for index, item := range ebl.Items {
+		if item.LimitInUsdOverTime < 0 {
+			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].costLimitOverTime is invalid", index))
+		}
+
+		if len(item.LimitInUsdUnit) == 0 {
+			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit is invalid", index))
+		}
+
+		if !slices.Contains(AllowedTimeUnits, item.LimitInUsdUnit) {
+			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit can not be identified", index))
+		}
+	}
 	return nil
 }
 
@@ -314,31 +348,41 @@ const (
 	MonthTimeUnit  TimeUnit = "mo"
 )
 
+var AllowedTimeUnits = []TimeUnit{
+	HourTimeUnit,
+	MinuteTimeUnit,
+	SecondTimeUnit,
+	DayTimeUnit,
+	WeekTimeUnit,
+	MonthTimeUnit,
+}
+
 type ResponseKey struct {
-	Name                   string       `json:"name"`
-	CreatedAt              int64        `json:"createdAt"`
-	UpdatedAt              int64        `json:"updatedAt"`
-	Tags                   []string     `json:"tags"`
-	KeyId                  string       `json:"keyId"`
-	Revoked                bool         `json:"revoked"`
-	Key                    string       `json:"key"`
-	RevokedReason          string       `json:"revokedReason"`
-	CostLimitInUsd         float64      `json:"costLimitInUsd"`
-	CostLimitInUsdOverTime float64      `json:"costLimitInUsdOverTime"`
-	CostLimitInUsdUnit     TimeUnit     `json:"costLimitInUsdUnit"`
-	RateLimitOverTime      int          `json:"rateLimitOverTime"`
-	RateLimitUnit          TimeUnit     `json:"rateLimitUnit"`
-	RequestsLimit          int          `json:"requestsLimit"`
-	Ttl                    string       `json:"ttl"`
-	KeyRing                string       `json:"keyRing"`
-	SettingId              string       `json:"settingId"`
-	AllowedPaths           []PathConfig `json:"allowedPaths"`
-	SettingIds             []string     `json:"settingIds"`
-	ShouldLogRequest       bool         `json:"shouldLogRequest"`
-	ShouldLogResponse      bool         `json:"shouldLogResponse"`
-	RotationEnabled        bool         `json:"rotationEnabled"`
-	PolicyId               string       `json:"policyId"`
-	IsKeyNotHashed         bool         `json:"isKeyNotHashed"`
+	Name                   string               `json:"name"`
+	CreatedAt              int64                `json:"createdAt"`
+	UpdatedAt              int64                `json:"updatedAt"`
+	Tags                   []string             `json:"tags"`
+	KeyId                  string               `json:"keyId"`
+	Revoked                bool                 `json:"revoked"`
+	Key                    string               `json:"key"`
+	RevokedReason          string               `json:"revokedReason"`
+	CostLimitInUsd         float64              `json:"costLimitInUsd"`
+	CostLimitInUsdOverTime float64              `json:"costLimitInUsdOverTime"`
+	CostLimitInUsdUnit     TimeUnit             `json:"costLimitInUsdUnit"`
+	RateLimitOverTime      int                  `json:"rateLimitOverTime"`
+	RateLimitUnit          TimeUnit             `json:"rateLimitUnit"`
+	RequestsLimit          int                  `json:"requestsLimit"`
+	Ttl                    string               `json:"ttl"`
+	KeyRing                string               `json:"keyRing"`
+	SettingId              string               `json:"settingId"`
+	AllowedPaths           []PathConfig         `json:"allowedPaths"`
+	SettingIds             []string             `json:"settingIds"`
+	ShouldLogRequest       bool                 `json:"shouldLogRequest"`
+	ShouldLogResponse      bool                 `json:"shouldLogResponse"`
+	RotationEnabled        bool                 `json:"rotationEnabled"`
+	PolicyId               string               `json:"policyId"`
+	IsKeyNotHashed         bool                 `json:"isKeyNotHashed"`
+	ExtendedBudgetLimit    *ExtendedBudgetLimit `json:"extendedBudgetLimit"`
 }
 
 func (rk *ResponseKey) GetSettingIds() []string {
