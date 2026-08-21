@@ -325,6 +325,8 @@ func validateExtendedBudgetLimit(ebl *ExtendedBudgetLimit) error {
 	if ebl == nil {
 		return nil
 	}
+
+	seenUnits := make(map[TimeUnit]struct{}, len(ebl.Items))
 	for index, item := range ebl.Items {
 		if item.LimitInUsdOverTime < 0 {
 			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].costLimitOverTime is invalid", index))
@@ -337,6 +339,11 @@ func validateExtendedBudgetLimit(ebl *ExtendedBudgetLimit) error {
 		if !slices.Contains(AllowedTimeUnits, item.Unit) {
 			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit can not be identified", index))
 		}
+
+		if _, exists := seenUnits[item.Unit]; exists {
+			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit is duplicated", index))
+		}
+		seenUnits[item.Unit] = struct{}{}
 	}
 	return nil
 }
