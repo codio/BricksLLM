@@ -14,7 +14,11 @@ const RevokedReasonExpired string = "expired"
 
 type ExtendedBudgetLimitItem struct {
 	LimitInUsdOverTime float64  `json:"costLimitOverTime"`
-	LimitInUsdUnit     TimeUnit `json:"unit"`
+	Unit               TimeUnit `json:"unit"`
+}
+
+func (i *ExtendedBudgetLimitItem) ExtendedKey(k string) string {
+	return fmt.Sprintf("%s-%s", k, i.Unit)
 }
 
 type ExtendedBudgetLimit struct {
@@ -326,11 +330,11 @@ func validateExtendedBudgetLimit(ebl *ExtendedBudgetLimit) error {
 			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].costLimitOverTime is invalid", index))
 		}
 
-		if len(item.LimitInUsdUnit) == 0 {
+		if len(item.Unit) == 0 {
 			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit is invalid", index))
 		}
 
-		if !slices.Contains(AllowedTimeUnits, item.LimitInUsdUnit) {
+		if !slices.Contains(AllowedTimeUnits, item.Unit) {
 			return internal_errors.NewValidationError(fmt.Sprintf("extendedBudgetLimit.items[%d].unit can not be identified", index))
 		}
 	}

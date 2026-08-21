@@ -75,6 +75,11 @@ func (v *Validator) Validate(k *key.ResponseKey, promptCost float64) error {
 		return err
 	}
 
+	err = v.validateExtendedCostLimitOverTime(k.KeyId, k.ExtendedBudgetLimit)
+	if err != nil {
+		return err
+	}
+
 	err = v.validateCostLimit(k.KeyId, k.CostLimitInUsd)
 	if err != nil {
 		return err
@@ -125,6 +130,26 @@ func (v *Validator) validateCostLimitOverTime(keyId string, costLimitOverTime fl
 		return internal_errors.NewCostLimitError(fmt.Sprintf("cost limit: %f has been reached for the current time period: %s", costLimitOverTime, costLimitUnit))
 	}
 
+	return nil
+}
+
+func (v *Validator) validateExtendedCostLimitOverTime(keyId string, limits *key.ExtendedBudgetLimit) error {
+	if limits == nil {
+		return nil
+	}
+	if limits.Items == nil || len(limits.Items) == 0 {
+		return nil
+	}
+
+	for _, item := range limits.Items {
+		if item.LimitInUsdOverTime == 0 {
+			continue
+		}
+		err := v.validateCostLimitOverTime(item.ExtendedKey(keyId), item.LimitInUsdOverTime, item.Unit)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

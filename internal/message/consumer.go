@@ -18,7 +18,7 @@ type Consumer struct {
 }
 
 type recorder interface {
-	RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit) error
+	RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit, extendedLimits *key.ExtendedBudgetLimit) error
 	RecordUserSpend(userId string, micros int64, costLimitUnit key.TimeUnit) error
 	RecordEvent(e *event.Event) error
 	RecordKeyRequestSpent(keyId string) error

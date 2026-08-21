@@ -340,7 +340,7 @@ func (h *Handler) HandleEventWithRequestAndResponse(m Message) error {
 
 		if e.Event.CostInUsd != 0 {
 			micros := int64(e.Event.CostInUsd * 1000000)
-			err = h.recorder.RecordKeySpend(e.Event.KeyId, micros, e.Key.CostLimitInUsdUnit)
+			err = h.recorder.RecordKeySpend(e.Event.KeyId, micros, e.Key.CostLimitInUsdUnit, e.Key.ExtendedBudgetLimit)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.handle_event_with_request_and_response.record_key_spend_error", nil, 1)
 				h.log.Debug("error when recording key spend", zap.Error(err))

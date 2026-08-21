@@ -60,7 +60,7 @@ func (r *Recorder) RecordUserSpend(userId string, micros int64, costLimitUnit ke
 	return nil
 }
 
-func (r *Recorder) RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit) error {
+func (r *Recorder) RecordKeySpend(keyId string, micros int64, costLimitUnit key.TimeUnit, extendedLimits *key.ExtendedBudgetLimit) error {
 	err := r.s.IncrementCounter(keyId, micros)
 	if err != nil {
 		return err
@@ -70,6 +70,15 @@ func (r *Recorder) RecordKeySpend(keyId string, micros int64, costLimitUnit key.
 		err = r.c.IncrementCounter(keyId, costLimitUnit, int64(micros))
 		if err != nil {
 			return err
+		}
+	}
+
+	if extendedLimits != nil {
+		for _, item := range extendedLimits.Items {
+			err = r.c.IncrementCounter(item.ExtendedKey(keyId), item.Unit, int64(micros))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
