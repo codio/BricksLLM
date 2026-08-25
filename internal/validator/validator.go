@@ -147,6 +147,9 @@ func (v *Validator) validateExtendedCostLimitOverTime(keyId string, limits *key.
 		}
 		err := v.validateCostLimitOverTime(item.ExtendedKey(keyId), item.LimitInUsdOverTime, item.Unit)
 		if err != nil {
+			if _, ok := err.(*internal_errors.CostLimitError); ok {
+				return internal_errors.NewCostLimitError(err.Error(), string(item.Unit))
+			}
 			return err
 		}
 	}

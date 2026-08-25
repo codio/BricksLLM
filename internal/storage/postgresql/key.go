@@ -14,6 +14,47 @@ import (
 	"github.com/lib/pq"
 )
 
+func marshalExtendedBudgetLimit(limit *key.ExtendedBudgetLimit) ([]byte, error) {
+	if limit == nil {
+		return nil, nil
+	}
+
+	return json.Marshal(limit)
+}
+
+func unmarshalExtendedBudgetLimit(data []byte) (*key.ExtendedBudgetLimit, error) {
+	if data == nil {
+		return nil, nil
+	}
+
+	var limit *key.ExtendedBudgetLimit
+	if err := json.Unmarshal(data, &limit); err != nil {
+		return nil, err
+	}
+
+	return limit, nil
+}
+
+func hydrateKeyJSONFields(k *key.ResponseKey, allowedPathsData, extendedBudgetLimitData []byte) error {
+	if len(allowedPathsData) != 0 {
+		pathConfigs := []key.PathConfig{}
+		if err := json.Unmarshal(allowedPathsData, &pathConfigs); err != nil {
+			return err
+		}
+
+		k.AllowedPaths = pathConfigs
+	}
+
+	extendedBudgetLimit, err := unmarshalExtendedBudgetLimit(extendedBudgetLimitData)
+	if err != nil {
+		return err
+	}
+
+	k.ExtendedBudgetLimit = extendedBudgetLimit
+
+	return nil
+}
+
 func (s *Store) CreateKeysTable() error {
 	createTableQuery := `
 	CREATE TABLE IF NOT EXISTS keys (
@@ -167,6 +208,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 		if err := rows.Scan(
 			&k.Name,
 			&k.CreatedAt,
@@ -192,7 +234,7 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
@@ -200,13 +242,8 @@ func (s *Store) GetKeys(tags, keyIds []string, provider string) ([]*key.Response
 		pk := &k
 		pk.SettingId = settingId.String
 
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		keys = append(keys, pk)
@@ -294,6 +331,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 		if err := rows.Scan(
 			&k.Name,
 			&k.CreatedAt,
@@ -319,7 +357,7 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
@@ -327,13 +365,8 @@ func (s *Store) GetKeysV2(tags, keyIds []string, revoked *bool, limit, offset in
 		pk := &k
 		pk.SettingId = settingId.String
 
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		keys = append(keys, pk)
@@ -374,6 +407,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 	var k key.ResponseKey
 	var settingId sql.NullString
 	var data []byte
+	var extendedBudgetLimitData []byte
 
 	err := s.db.QueryRowContext(ctxTimeout, "SELECT * FROM keys WHERE key = $1", hash).Scan(
 		&k.Name,
@@ -400,7 +434,7 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
-		&k.ExtendedBudgetLimit,
+		&extendedBudgetLimitData,
 	)
 
 	if err != nil {
@@ -413,13 +447,8 @@ func (s *Store) GetKeyByHash(hash string) (*key.ResponseKey, error) {
 
 	k.SettingId = settingId.String
 
-	if len(data) != 0 {
-		pathConfigs := []key.PathConfig{}
-		if err := json.Unmarshal(data, &pathConfigs); err != nil {
-			return nil, err
-		}
-
-		k.AllowedPaths = pathConfigs
+	if err := hydrateKeyJSONFields(&k, data, extendedBudgetLimitData); err != nil {
+		return nil, err
 	}
 
 	return &k, nil
@@ -440,6 +469,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 
 		if err := rows.Scan(
 			&k.Name,
@@ -466,7 +496,7 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
@@ -474,13 +504,8 @@ func (s *Store) GetKey(keyId string) (*key.ResponseKey, error) {
 		pk := &k
 		pk.SettingId = settingId.String
 
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		keys = append(keys, pk)
@@ -539,6 +564,7 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 		if err := rows.Scan(
 			&k.Name,
 			&k.CreatedAt,
@@ -564,20 +590,15 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
 		pk := &k
 		pk.SettingId = settingId.String
 
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		if !validator(pk) {
@@ -606,6 +627,7 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 		if err := rows.Scan(
 			&k.Name,
 			&k.CreatedAt,
@@ -631,20 +653,15 @@ func (s *Store) GetAllKeys() ([]*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
 		pk := &k
 		pk.SettingId = settingId.String
 
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		keys = append(keys, pk)
@@ -668,6 +685,7 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 		var k key.ResponseKey
 		var settingId sql.NullString
 		var data []byte
+		var extendedBudgetLimitData []byte
 		if err := rows.Scan(
 			&k.Name,
 			&k.CreatedAt,
@@ -693,20 +711,15 @@ func (s *Store) GetUpdatedKeys(updatedAt int64) ([]*key.ResponseKey, error) {
 			&k.PolicyId,
 			&k.IsKeyNotHashed,
 			&k.RequestsLimit,
-			&k.ExtendedBudgetLimit,
+			&extendedBudgetLimitData,
 		); err != nil {
 			return nil, err
 		}
 
 		pk := &k
 		pk.SettingId = settingId.String
-		if len(data) != 0 {
-			pathConfigs := []key.PathConfig{}
-			if err := json.Unmarshal(data, &pathConfigs); err != nil {
-				return nil, err
-			}
-
-			pk.AllowedPaths = pathConfigs
+		if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+			return nil, err
 		}
 
 		keys = append(keys, pk)
@@ -801,7 +814,12 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 	}
 
 	if uk.ExtendedBudgetLimit != nil {
-		values = append(values, *uk.ExtendedBudgetLimit)
+		data, err := marshalExtendedBudgetLimit(uk.ExtendedBudgetLimit)
+		if err != nil {
+			return nil, err
+		}
+
+		values = append(values, data)
 		fields = append(fields, fmt.Sprintf("extended_budget_limit = $%d", counter))
 		counter++
 	}
@@ -854,6 +872,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 	var k key.ResponseKey
 	var settingId sql.NullString
 	var data []byte
+	var extendedBudgetLimitData []byte
 	if err := s.db.QueryRowContext(ctxTimeout, query, values...).Scan(
 		&k.Name,
 		&k.CreatedAt,
@@ -879,7 +898,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
-		&k.ExtendedBudgetLimit,
+		&extendedBudgetLimitData,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, internal_errors.NewNotFoundError(fmt.Sprintf("key not found for id: %s", id))
@@ -890,13 +909,8 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 	pk := &k
 	pk.SettingId = settingId.String
 
-	if len(data) != 0 {
-		pathConfigs := []key.PathConfig{}
-		if err := json.Unmarshal(data, &pathConfigs); err != nil {
-			return nil, err
-		}
-
-		pk.AllowedPaths = pathConfigs
+	if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+		return nil, err
 	}
 
 	return pk, nil
@@ -910,6 +924,11 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 	`
 
 	rdata, err := json.Marshal(rk.AllowedPaths)
+	if err != nil {
+		return nil, err
+	}
+
+	extendedBudgetLimitValue, err := marshalExtendedBudgetLimit(rk.ExtendedBudgetLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -939,7 +958,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		rk.PolicyId,
 		rk.IsKeyNotHashed,
 		rk.RequestsLimit,
-		rk.ExtendedBudgetLimit,
+		extendedBudgetLimitValue,
 	}
 
 	ctxTimeout, cancel := context.WithTimeout(context.Background(), s.wt)
@@ -949,6 +968,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 
 	var settingId sql.NullString
 	var data []byte
+	var extendedBudgetLimitData []byte
 	if err := s.db.QueryRowContext(ctxTimeout, query, values...).Scan(
 		&k.Name,
 		&k.CreatedAt,
@@ -974,7 +994,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		&k.PolicyId,
 		&k.IsKeyNotHashed,
 		&k.RequestsLimit,
-		&k.ExtendedBudgetLimit,
+		&extendedBudgetLimitData,
 	); err != nil {
 		return nil, err
 	}
@@ -982,13 +1002,8 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 	pk := &k
 	pk.SettingId = settingId.String
 
-	if len(data) != 0 {
-		pathConfigs := []key.PathConfig{}
-		if err := json.Unmarshal(data, &pathConfigs); err != nil {
-			return nil, err
-		}
-
-		pk.AllowedPaths = pathConfigs
+	if err := hydrateKeyJSONFields(pk, data, extendedBudgetLimitData); err != nil {
+		return nil, err
 	}
 
 	return pk, nil

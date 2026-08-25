@@ -162,6 +162,9 @@ func (uk *UpdateKey) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
+	if err := validateExtendedBudgetLimit(uk.ExtendedBudgetLimit); err != nil {
+		return err
+	}
 
 	return nil
 }

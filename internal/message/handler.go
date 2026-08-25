@@ -182,6 +182,10 @@ type costLimitError interface {
 	CostLimit()
 }
 
+type costLimitTimeUnitError interface {
+	TimeUnit() string
+}
+
 type rateLimitError interface {
 	Error() string
 	RateLimit()
@@ -247,7 +251,12 @@ func (h *Handler) handleValidationResult(kc *key.ResponseKey, cost float64) erro
 		if _, ok := err.(costLimitError); ok {
 			telemetry.Incr("bricksllm.message.handler.handle_validation_result.cost_limit_error", nil, 1)
 
-			err = h.ac.Set(kc.KeyId, kc.CostLimitInUsdUnit)
+			costLimitUnit := kc.CostLimitInUsdUnit
+			if cle, ok := err.(costLimitTimeUnitError); ok && len(cle.TimeUnit()) != 0 {
+				costLimitUnit = key.TimeUnit(cle.TimeUnit())
+			}
+
+			err = h.ac.Set(kc.KeyId, costLimitUnit)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.handle_validation_result.set_cost_limit_error", nil, 1)
 				return err
