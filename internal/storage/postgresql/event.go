@@ -651,6 +651,10 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 	return data, nil
 }
 
+func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*event.StatisticsData, error) {
+	return &event.StatisticsData{}, nil
+}
+
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {

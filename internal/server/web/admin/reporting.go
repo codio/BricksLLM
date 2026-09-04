@@ -550,3 +550,75 @@ func getGetUsageMetricsHandler(m KeyReportingManager, prod bool) gin.HandlerFunc
 		c.JSON(http.StatusOK, reportingResponse)
 	}
 }
+
+func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_get_statistic_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_get_statistic_handler.latency", dur, nil, 1)
+		}()
+
+		path := "/api/reporting/statistic"
+
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading usage reporting request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		request := &event.StatisticsRequest{}
+		err = json.Unmarshal(data, request)
+		if err != nil {
+			logError(log, "error when unmarshalling statistics request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		statisticResponse, err := m.GetStatistic(request)
+		if err != nil {
+			telemetry.Incr("bricksllm.admin.get_get_statistic_handler.get_statistic", nil, 1)
+
+			logError(log, "error when getting top key ring reporting", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/event-reporting-manager",
+				Title:    "usage reporting error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_get_statistic_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, statisticResponse)
+	}
+}

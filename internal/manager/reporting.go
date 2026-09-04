@@ -33,6 +33,7 @@ type eventStorage interface {
 
 	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
+	GetStatisticsData(level event.StatisticLevel, id *string) (*event.StatisticsData, error)
 }
 
 type ReportingManager struct {
@@ -184,6 +185,21 @@ func (rm *ReportingManager) GetUsageReporting(r *event.UsageReportingRequest) (*
 	}
 	return &event.UsageReportingResponse{
 		UsageData: usage,
+	}, nil
+}
+
+func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.StatisticsResponse, error) {
+	if r == nil {
+		return nil, internal_errors.NewValidationError("statistics request cannot be nil")
+	}
+	// todo
+	statistics, err := rm.es.GetStatisticsData(r.GetLevel(), r.Id)
+	if err != nil {
+		return nil, err
+	}
+	// todo
+	return &event.StatisticsResponse{
+		StatisticsData: statistics,
 	}, nil
 }
 
