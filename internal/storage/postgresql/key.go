@@ -14,27 +14,6 @@ import (
 	"github.com/lib/pq"
 )
 
-func marshalExtendedBudgetLimit(limit *key.ExtendedBudgetLimit) ([]byte, error) {
-	if limit == nil {
-		return nil, nil
-	}
-
-	return json.Marshal(limit)
-}
-
-func unmarshalExtendedBudgetLimit(data []byte) (*key.ExtendedBudgetLimit, error) {
-	if data == nil {
-		return nil, nil
-	}
-
-	var limit *key.ExtendedBudgetLimit
-	if err := json.Unmarshal(data, &limit); err != nil {
-		return nil, err
-	}
-
-	return limit, nil
-}
-
 func hydrateKeyJSONFields(k *key.ResponseKey, allowedPathsData, extendedBudgetLimitData []byte) error {
 	if len(allowedPathsData) != 0 {
 		pathConfigs := []key.PathConfig{}
@@ -44,14 +23,13 @@ func hydrateKeyJSONFields(k *key.ResponseKey, allowedPathsData, extendedBudgetLi
 
 		k.AllowedPaths = pathConfigs
 	}
-
-	extendedBudgetLimit, err := unmarshalExtendedBudgetLimit(extendedBudgetLimitData)
-	if err != nil {
-		return err
+	if len(extendedBudgetLimitData) != 0 {
+		extendedBudgetLimit := &key.ExtendedBudgetLimit{}
+		if err := json.Unmarshal(extendedBudgetLimitData, extendedBudgetLimit); err != nil {
+			return err
+		}
+		k.ExtendedBudgetLimit = extendedBudgetLimit
 	}
-
-	k.ExtendedBudgetLimit = extendedBudgetLimit
-
 	return nil
 }
 
@@ -90,8 +68,8 @@ func (s *Store) AlterKeysTable() error {
 		DO $$
 		BEGIN
 			IF NOT EXISTS (
-				SELECT 1 
-				FROM pg_constraint 
+				SELECT 1
+				FROM pg_constraint
 				WHERE conname = 'key_uniqueness'
 			) THEN
 				ALTER TABLE keys
@@ -541,7 +519,7 @@ func (s *Store) GetSpentKeys(tags []string, order string, limit, offset int, val
 	}
 
 	query += fmt.Sprintf(`
-	ORDER BY created_at %s 
+	ORDER BY created_at %s
 `, qorder)
 
 	if limit != 0 {
@@ -814,7 +792,7 @@ func (s *Store) UpdateKey(id string, uk *key.UpdateKey) (*key.ResponseKey, error
 	}
 
 	if uk.ExtendedBudgetLimit != nil {
-		data, err := marshalExtendedBudgetLimit(uk.ExtendedBudgetLimit)
+		data, err := json.Marshal(uk.ExtendedBudgetLimit)
 		if err != nil {
 			return nil, err
 		}
@@ -928,7 +906,7 @@ func (s *Store) CreateKey(rk *key.RequestKey) (*key.ResponseKey, error) {
 		return nil, err
 	}
 
-	extendedBudgetLimitValue, err := marshalExtendedBudgetLimit(rk.ExtendedBudgetLimit)
+	extendedBudgetLimitValue, err := json.Marshal(rk.ExtendedBudgetLimit)
 	if err != nil {
 		return nil, err
 	}

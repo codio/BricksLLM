@@ -517,7 +517,6 @@ func getCreateKeyHandler(m KeyManager, prod bool) gin.HandlerFunc {
 			return
 		}
 
-		fmt.Print(string(data))
 		rk := &key.RequestKey{}
 		err = json.Unmarshal(data, rk)
 		if err != nil {
