@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -652,7 +654,390 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 }
 
 func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*event.StatisticsData, error) {
-	return &event.StatisticsData{}, nil
+	result := &event.StatisticsData{}
+
+	switch level {
+	case event.StisticLevels.All:
+		total, err := s.getTotalCostPack(nil)
+		if err != nil {
+			return nil, err
+		}
+
+		orgPacks, err := s.GetOrgsCostPack()
+		if err != nil {
+			return nil, err
+		}
+
+		orgs := make([]event.ShortOrgStatisticsData, 0, len(orgPacks))
+		for orgID, costs := range orgPacks {
+			orgs = append(orgs, event.ShortOrgStatisticsData{Id: orgID, Costs: costs})
+		}
+		slices.SortFunc(orgs, func(a, b event.ShortOrgStatisticsData) int {
+			return strings.Compare(a.Id, b.Id)
+		})
+
+		result.AllStatisticsData = &event.AllStatisticsData{
+			Total: *total,
+			Orgs:  orgs,
+		}
+	case event.StisticLevels.Org:
+		if id == nil || len(*id) == 0 {
+			return nil, internal_errors.NewValidationError("id must be provided when level is 'org'")
+		}
+
+		costs, err := s.getTotalCostPack([]string{orgTagPrefix + *id})
+		if err != nil {
+			return nil, err
+		}
+
+		coursePacks, err := s.GetCoursesCostPack(*id)
+		if err != nil {
+			return nil, err
+		}
+
+		courses := make([]event.CourseStatisticsData, 0, len(coursePacks))
+		for courseID, courseCosts := range coursePacks {
+			courses = append(courses, event.CourseStatisticsData{Id: courseID, Costs: courseCosts})
+		}
+		slices.SortFunc(courses, func(a, b event.CourseStatisticsData) int {
+			return strings.Compare(a.Id, b.Id)
+		})
+
+		bellCurve, kpis, err := s.getUserSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag)
+		if err != nil {
+			return nil, err
+		}
+
+		result.OrgStatisticsData = &event.OrgStatisticsData{
+			Id:                    *id,
+			Costs:                 *costs,
+			Courses:               courses,
+			BellCurveSpecial:      bellCurve,
+			FinancialKpisSpecial:  *kpis,
+		}
+	case event.StisticLevels.Course:
+		if id == nil || len(*id) == 0 {
+			return nil, internal_errors.NewValidationError("id must be provided when level is 'course'")
+		}
+
+		costs, err := s.GetCourseCostPack(*id)
+		if err != nil {
+			return nil, err
+		}
+
+		bellCurve, kpis, err := s.getUserSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag)
+		if err != nil {
+			return nil, err
+		}
+
+		result.CourseStatisticsData = &event.CourseStatisticsData{
+			Id:                         *id,
+			Costs:                      *costs,
+			BellCurveCodioProvided:     bellCurve,
+			FinancialKpisCodioProvided: *kpis,
+		}
+	default:
+		return nil, internal_errors.NewValidationError("invalid level")
+	}
+
+	return result, nil
+}
+
+// {
+//   "total": costPack,
+//   "orgs": [
+//     {
+//       "id": string,
+//       "costs": costPack,
+//     },
+//   ]
+// }
+// 
+//   val ORG_TAG_PREFIX = "org-tag-"
+// val USER_TAG_PREFIX = "user-tag-"
+// val COURSE_TAG_PREFIX = "course-tag-"
+// 
+// val CODIO_SPECIAL_TAG = "codio-special"
+// val CODIO_PROVIDED_TAG = "codio-provided"
+// 
+// type Cost struct {
+// 	OneMonth float64 `json:"1month"`
+// 	FiveMonth float64 `json:"5month"`
+// }
+
+// type CostPack struct {
+// 	CodioProvided Cost `json:"codioProvided"`
+// 	CodioSpecial  Cost `json:"codioSpecial"`
+// }
+// 
+// SELECT 
+//     substring(elem FROM 'org-tag-(.+)') AS user_id,
+//     count(*) AS total_records
+// FROM 
+//     your_table,
+//     unnest(your_array_column) AS elem
+// WHERE 
+//     elem LIKE 'org-tag--%'
+// GROUP BY 
+//     user_id;
+// 
+// 
+// 
+
+// "event_id"	"created_at"	"tags"	"key_id"	"cost_in_usd"	"provider"	"model"	"status_code"	"prompt_token_count"	"completion_token_count"	"latency_in_ms"	"path"	"method"	"custom_id"	"request"	"response"	"user_id"	"action"	"policy_id"	"route_id"	"correlation_id"	"metadata"
+// "0df9bc37-0e76-4192-ad43-d721acf6d638"	1785927977	"{org-tag-134db24b-62c3-44f5-b929-ec668f13d98b,user-tag-00112233-4455-6677-9cef-5b5dd134bfbf,course-tag-44e1ee81b625dbb97e4b5f2c57ab3183,codio-special}"	"a950fce4-f91a-4195-9202-24480956d2f7"	0	"openai"	"gpt-5.4-nano"	401	0	0	266	"/api/providers/openai/v1/responses"	"POST"		"{""input"": [{""role"": ""user"", ""content"": [{""text"": ""hello"", ""type"": ""input_text""}]}], ""model"": ""gpt-5.4-nano"", ""stream"": true}"	"{}"					"6a797d0f-5480-4d8c-bf7a-931f97e00666"	"{}"
+// 
+
+
+const (
+	orgTagPrefix     = "org-tag-"
+	userTagPrefix    = "user-tag-"
+	courseTagPrefix  = "course-tag-"
+	codioSpecialTag  = "codio-special"
+	codioProvidedTag = "codio-provided"
+)
+
+func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[string]event.CostPack, error) {
+	now := time.Now()
+	oneMonthAgo := now.Add(-30 * 24 * time.Hour).Unix()
+	fiveMonthsAgo := now.Add(-5 * 30 * 24 * time.Hour).Unix()
+
+	args := []any{groupBy, oneMonthAgo, fiveMonthsAgo}
+	conditions := []string{"e.created_at >= $3"}
+	index := 4
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			regexp_replace(tag, '^' || $1, '') AS grouped_id,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+		FROM events e,
+		LATERAL unnest(e.tags) AS tag
+		WHERE tag LIKE $1 || '%%'
+			AND %s
+		GROUP BY grouped_id
+	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]event.CostPack)
+	for rows.Next() {
+		var id string
+		var pack event.CostPack
+
+		if err := rows.Scan(
+			&id,
+			&pack.CodioProvided.OneMonth,
+			&pack.CodioProvided.FiveMonth,
+			&pack.CodioSpecial.OneMonth,
+			&pack.CodioSpecial.FiveMonth,
+		); err != nil {
+			return nil, err
+		}
+
+		result[id] = pack
+	}
+
+	return result, nil
+}
+
+func (s *Store) getTotalCostPack(filterTags []string) (*event.CostPack, error) {
+	now := time.Now()
+	oneMonthAgo := now.Add(-30 * 24 * time.Hour).Unix()
+	fiveMonthsAgo := now.Add(-5 * 30 * 24 * time.Hour).Unix()
+
+	args := []any{oneMonthAgo, fiveMonthsAgo}
+	conditions := []string{"created_at >= $2"}
+	index := 3
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+		FROM events
+		WHERE %s
+	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	pack := &event.CostPack{}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
+		&pack.CodioProvided.OneMonth,
+		&pack.CodioProvided.FiveMonth,
+		&pack.CodioSpecial.OneMonth,
+		&pack.CodioSpecial.FiveMonth,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return pack, nil
+		}
+		return nil, err
+	}
+
+	return pack, nil
+}
+
+func (s *Store) GetOrgsCostPack() (map[string]event.CostPack, error) {
+	return s.getGroupedCostPack(orgTagPrefix, nil)
+}
+
+func (s *Store) GetCoursesCostPack(orgId string) (map[string]event.CostPack, error) {
+	return s.getGroupedCostPack(courseTagPrefix, []string{orgTagPrefix + orgId})
+}
+
+func (s *Store) GetCourseCostPack(courseId string) (*event.CostPack, error) {
+	return s.getTotalCostPack([]string{courseTagPrefix + courseId})
+}
+
+func (s *Store) getUserSpendStatistics(filterTags []string, costTypeTag string) ([]event.BellCurveDataPoint, *event.FinancialKpis, error) {
+	spendByUser, err := s.getUserSpendByTags(filterTags, costTypeTag)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	values := make([]float64, 0, len(spendByUser))
+	for _, spend := range spendByUser {
+		values = append(values, spend)
+	}
+
+	bellCurve := buildBellCurve(values)
+	kpis := buildFinancialKpis(values)
+	return bellCurve, kpis, nil
+}
+
+func (s *Store) getUserSpendByTags(filterTags []string, costTypeTag string) (map[string]float64, error) {
+	args := []any{userTagPrefix, costTypeTag}
+	conditions := []string{"tag LIKE $1 || '%'", "e.tags @> $2"}
+	index := 3
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			regexp_replace(tag, '^' || $1, '') AS user_id,
+			COALESCE(SUM(e.cost_in_usd), 0) AS total_cost
+		FROM events e,
+		LATERAL unnest(e.tags) AS tag
+		WHERE %s
+		GROUP BY user_id
+	`, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]float64)
+	for rows.Next() {
+		var userID string
+		var spend float64
+		if err := rows.Scan(&userID, &spend); err != nil {
+			return nil, err
+		}
+		result[userID] = spend
+	}
+
+	return result, nil
+}
+
+func buildBellCurve(values []float64) []event.BellCurveDataPoint {
+	buckets := []struct {
+		label string
+		min   float64
+		max   float64
+	}{
+		{label: "0-10", min: 0, max: 10},
+		{label: "10-20", min: 10, max: 20},
+		{label: "20-30", min: 20, max: 30},
+		{label: "30-50", min: 30, max: 50},
+		{label: "50+", min: 50, max: math.Inf(1)},
+	}
+
+	counts := make([]int, len(buckets))
+	for _, v := range values {
+		switch {
+		case v < 10:
+			counts[0]++
+		case v < 20:
+			counts[1]++
+		case v < 30:
+			counts[2]++
+		case v < 50:
+			counts[3]++
+		default:
+			counts[4]++
+		}
+	}
+
+	result := make([]event.BellCurveDataPoint, 0, len(buckets))
+	for i, bucket := range buckets {
+		result = append(result, event.BellCurveDataPoint{
+			CostBucketUsd: bucket.label,
+			UserCount:     counts[i],
+			SerialNo:      i + 1,
+		})
+	}
+
+	return result
+}
+
+func buildFinancialKpis(values []float64) *event.FinancialKpis {
+	if len(values) == 0 {
+		return &event.FinancialKpis{}
+	}
+
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+
+	total := 0.0
+	for _, v := range sorted {
+		total += v
+	}
+
+	median := 0.0
+	mid := len(sorted) / 2
+	if len(sorted)%2 == 0 {
+		median = (sorted[mid-1] + sorted[mid]) / 2
+	} else {
+		median = sorted[mid]
+	}
+
+	return &event.FinancialKpis{
+		MaxUserSpend:    sorted[len(sorted)-1],
+		MedianUserSpend: median,
+		AvgUserSpend:    total / float64(len(sorted)),
+	}
 }
 
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {

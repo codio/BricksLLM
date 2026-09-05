@@ -132,4 +132,55 @@ type StatisticsResponse struct {
 	StatisticsData *StatisticsData `json:"statisticsData"`
 }
 
-type StatisticsData struct {}
+type StatisticsData struct {
+	AllStatisticsData *AllStatisticsData `json:"allStatisticsData,omitempty"`
+	OrgStatisticsData *OrgStatisticsData `json:"orgStatisticsData,omitempty"`
+	CourseStatisticsData *CourseStatisticsData `json:"courseStatisticsData,omitempty"`
+}
+
+type Cost struct {
+	OneMonth float64 `json:"1month"`
+	FiveMonth float64 `json:"5month"`
+}
+
+type CostPack struct {
+	CodioProvided Cost `json:"codioProvided"`
+	CodioSpecial  Cost `json:"codioSpecial"`
+}
+
+type BellCurveDataPoint struct {
+	CostBucketUsd string `json:"costBucketUsd"`
+	UserCount     int    `json:"userCount"`
+	SerialNo      int    `json:"serialNo"`
+}
+
+type FinancialKpis struct {
+	MaxUserSpend    float64 `json:"maxUserSpend"`
+	MedianUserSpend float64 `json:"medianUserSpend"`
+	AvgUserSpend    float64 `json:"avgUserSpend"`
+}
+
+type AllStatisticsData struct {
+	Total CostPack `json:"total"`
+	Orgs  []ShortOrgStatisticsData `json:"orgs"`
+}
+
+type ShortOrgStatisticsData struct {
+	Id    string   `json:"id"`
+	Costs CostPack `json:"costs"`
+}
+
+type OrgStatisticsData struct {
+	Id      string   `json:"id"`
+	Costs   CostPack `json:"costs"`
+	Courses []CourseStatisticsData `json:"courses"`
+	BellCurveSpecial []BellCurveDataPoint `json:"bellCurveSpecial"`
+	FinancialKpisSpecial FinancialKpis `json:"financialKpisSpecial"`
+}
+
+type CourseStatisticsData struct {
+	Id      string   `json:"id"`
+	Costs   CostPack `json:"costs"`
+	BellCurveCodioProvided []BellCurveDataPoint `json:"bellCurveCodioProvided"`
+	FinancialKpisCodioProvided FinancialKpis `json:"financialKpisCodioProvided"`
+}

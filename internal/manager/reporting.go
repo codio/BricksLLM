@@ -192,14 +192,18 @@ func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.Sta
 	if r == nil {
 		return nil, internal_errors.NewValidationError("statistics request cannot be nil")
 	}
-	// todo
-	statistics, err := rm.es.GetStatisticsData(r.GetLevel(), r.Id)
+
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	statisticsData, err := rm.es.GetStatisticsData(r.GetLevel(), r.Id)
 	if err != nil {
 		return nil, err
 	}
-	// todo
+
 	return &event.StatisticsResponse{
-		StatisticsData: statistics,
+		StatisticsData: statisticsData,
 	}, nil
 }
 
