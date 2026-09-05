@@ -82,23 +82,22 @@ type UsageReportingResponse struct {
 }
 
 type StatisticsRequest struct {
-	Level string `json:"level"` // all | org | course
-	Id *string `json:"id"`
+	Level string  `json:"level"` // all | org | course
+	Id    *string `json:"id"`
 }
 
 type StatisticLevel string
 
 var StisticLevels = struct {
 	Unknown StatisticLevel
-	All    StatisticLevel
-	Org    StatisticLevel
-	Course StatisticLevel
-
+	All     StatisticLevel
+	Org     StatisticLevel
+	Course  StatisticLevel
 }{
 	Unknown: "unknown",
-	All:    "all",
-	Org:    "org",
-	Course: "course",
+	All:     "all",
+	Org:     "org",
+	Course:  "course",
 }
 
 func StatisticLevelFromStr(s string) StatisticLevel {
@@ -133,13 +132,13 @@ type StatisticsResponse struct {
 }
 
 type StatisticsData struct {
-	AllStatisticsData *AllStatisticsData `json:"allStatisticsData,omitempty"`
-	OrgStatisticsData *OrgStatisticsData `json:"orgStatisticsData,omitempty"`
+	AllStatisticsData    *AllStatisticsData    `json:"allStatisticsData,omitempty"`
+	OrgStatisticsData    *OrgStatisticsData    `json:"orgStatisticsData,omitempty"`
 	CourseStatisticsData *CourseStatisticsData `json:"courseStatisticsData,omitempty"`
 }
 
 type Cost struct {
-	OneMonth float64 `json:"1month"`
+	OneMonth  float64 `json:"1month"`
 	FiveMonth float64 `json:"5month"`
 }
 
@@ -150,18 +149,29 @@ type CostPack struct {
 
 type BellCurveDataPoint struct {
 	CostBucketUsd string `json:"costBucketUsd"`
-	UserCount     int    `json:"userCount"`
+	SampleCount   int    `json:"sampleCount"`
 	SerialNo      int    `json:"serialNo"`
 }
 
 type FinancialKpis struct {
-	MaxUserSpend    float64 `json:"maxUserSpend"`
-	MedianUserSpend float64 `json:"medianUserSpend"`
-	AvgUserSpend    float64 `json:"avgUserSpend"`
+	MaxUserSpend            float64 `json:"maxUserSpend"`
+	MedianUserSpend         float64 `json:"medianUserSpend"`
+	AvgUserSpend            float64 `json:"avgUserSpend"`
+	P90UserSpend            float64 `json:"p90UserSpend"`
+	P95UserSpend            float64 `json:"p95UserSpend"`
+	P99UserSpend            float64 `json:"p99UserSpend"`
+	SampleCount             int     `json:"sampleCount"`
+	RecommendedSoftLimitUsd float64 `json:"recommendedSoftLimitUsd"`
+	RecommendedHardLimitUsd float64 `json:"recommendedHardLimitUsd"`
+}
+
+type SpendPeriodStatistics struct {
+	BellCurve     []BellCurveDataPoint `json:"bellCurve"`
+	FinancialKpis FinancialKpis        `json:"financialKpis"`
 }
 
 type AllStatisticsData struct {
-	Total CostPack `json:"total"`
+	Total CostPack                 `json:"total"`
 	Orgs  []ShortOrgStatisticsData `json:"orgs"`
 }
 
@@ -170,17 +180,24 @@ type ShortOrgStatisticsData struct {
 	Costs CostPack `json:"costs"`
 }
 
+type ShortCourseStatisticsData struct {
+	Id    string   `json:"id"`
+	Costs CostPack `json:"costs"`
+}
+
 type OrgStatisticsData struct {
-	Id      string   `json:"id"`
-	Costs   CostPack `json:"costs"`
-	Courses []CourseStatisticsData `json:"courses"`
-	BellCurveSpecial []BellCurveDataPoint `json:"bellCurveSpecial"`
-	FinancialKpisSpecial FinancialKpis `json:"financialKpisSpecial"`
+	Id             string                      `json:"id"`
+	Costs          CostPack                    `json:"costs"`
+	Courses        []ShortCourseStatisticsData `json:"courses"`
+	DailySpecial   SpendPeriodStatistics       `json:"dailySpecial"`
+	WeeklySpecial  SpendPeriodStatistics       `json:"weeklySpecial"`
+	MonthlySpecial SpendPeriodStatistics       `json:"monthlySpecial"`
 }
 
 type CourseStatisticsData struct {
-	Id      string   `json:"id"`
-	Costs   CostPack `json:"costs"`
-	BellCurveCodioProvided []BellCurveDataPoint `json:"bellCurveCodioProvided"`
-	FinancialKpisCodioProvided FinancialKpis `json:"financialKpisCodioProvided"`
+	Id                   string                `json:"id"`
+	Costs                CostPack              `json:"costs"`
+	DailyCodioProvided   SpendPeriodStatistics `json:"dailyCodioProvided"`
+	WeeklyCodioProvided  SpendPeriodStatistics `json:"weeklyCodioProvided"`
+	MonthlyCodioProvided SpendPeriodStatistics `json:"monthlyCodioProvided"`
 }

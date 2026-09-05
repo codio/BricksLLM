@@ -695,25 +695,34 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return nil, err
 		}
 
-		courses := make([]event.CourseStatisticsData, 0, len(coursePacks))
+		courses := make([]event.ShortCourseStatisticsData, 0, len(coursePacks))
 		for courseID, courseCosts := range coursePacks {
-			courses = append(courses, event.CourseStatisticsData{Id: courseID, Costs: courseCosts})
+			courses = append(courses, event.ShortCourseStatisticsData{Id: courseID, Costs: courseCosts})
 		}
-		slices.SortFunc(courses, func(a, b event.CourseStatisticsData) int {
+		slices.SortFunc(courses, func(a, b event.ShortCourseStatisticsData) int {
 			return strings.Compare(a.Id, b.Id)
 		})
 
-		bellCurve, kpis, err := s.getUserSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag)
+		dailySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "day")
+		if err != nil {
+			return nil, err
+		}
+		weeklySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "month")
 		if err != nil {
 			return nil, err
 		}
 
 		result.OrgStatisticsData = &event.OrgStatisticsData{
-			Id:                    *id,
-			Costs:                 *costs,
-			Courses:               courses,
-			BellCurveSpecial:      bellCurve,
-			FinancialKpisSpecial:  *kpis,
+			Id:             *id,
+			Costs:          *costs,
+			Courses:        courses,
+			DailySpecial:   *dailySpecial,
+			WeeklySpecial:  *weeklySpecial,
+			MonthlySpecial: *monthlySpecial,
 		}
 	case event.StisticLevels.Course:
 		if id == nil || len(*id) == 0 {
@@ -725,16 +734,25 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return nil, err
 		}
 
-		bellCurve, kpis, err := s.getUserSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag)
+		dailyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "day")
+		if err != nil {
+			return nil, err
+		}
+		weeklyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "month")
 		if err != nil {
 			return nil, err
 		}
 
 		result.CourseStatisticsData = &event.CourseStatisticsData{
-			Id:                         *id,
-			Costs:                      *costs,
-			BellCurveCodioProvided:     bellCurve,
-			FinancialKpisCodioProvided: *kpis,
+			Id:                   *id,
+			Costs:                *costs,
+			DailyCodioProvided:   *dailyProvided,
+			WeeklyCodioProvided:  *weeklyProvided,
+			MonthlyCodioProvided: *monthlyProvided,
 		}
 	default:
 		return nil, internal_errors.NewValidationError("invalid level")
@@ -752,14 +770,14 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 //     },
 //   ]
 // }
-// 
+//
 //   val ORG_TAG_PREFIX = "org-tag-"
 // val USER_TAG_PREFIX = "user-tag-"
 // val COURSE_TAG_PREFIX = "course-tag-"
-// 
+//
 // val CODIO_SPECIAL_TAG = "codio-special"
 // val CODIO_PROVIDED_TAG = "codio-provided"
-// 
+//
 // type Cost struct {
 // 	OneMonth float64 `json:"1month"`
 // 	FiveMonth float64 `json:"5month"`
@@ -769,32 +787,32 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 // 	CodioProvided Cost `json:"codioProvided"`
 // 	CodioSpecial  Cost `json:"codioSpecial"`
 // }
-// 
-// SELECT 
+//
+// SELECT
 //     substring(elem FROM 'org-tag-(.+)') AS user_id,
 //     count(*) AS total_records
-// FROM 
+// FROM
 //     your_table,
 //     unnest(your_array_column) AS elem
-// WHERE 
+// WHERE
 //     elem LIKE 'org-tag--%'
-// GROUP BY 
+// GROUP BY
 //     user_id;
-// 
-// 
-// 
+//
+//
+//
 
 // "event_id"	"created_at"	"tags"	"key_id"	"cost_in_usd"	"provider"	"model"	"status_code"	"prompt_token_count"	"completion_token_count"	"latency_in_ms"	"path"	"method"	"custom_id"	"request"	"response"	"user_id"	"action"	"policy_id"	"route_id"	"correlation_id"	"metadata"
 // "0df9bc37-0e76-4192-ad43-d721acf6d638"	1785927977	"{org-tag-134db24b-62c3-44f5-b929-ec668f13d98b,user-tag-00112233-4455-6677-9cef-5b5dd134bfbf,course-tag-44e1ee81b625dbb97e4b5f2c57ab3183,codio-special}"	"a950fce4-f91a-4195-9202-24480956d2f7"	0	"openai"	"gpt-5.4-nano"	401	0	0	266	"/api/providers/openai/v1/responses"	"POST"		"{""input"": [{""role"": ""user"", ""content"": [{""text"": ""hello"", ""type"": ""input_text""}]}], ""model"": ""gpt-5.4-nano"", ""stream"": true}"	"{}"					"6a797d0f-5480-4d8c-bf7a-931f97e00666"	"{}"
-// 
-
+//
 
 const (
-	orgTagPrefix     = "org-tag-"
-	userTagPrefix    = "user-tag-"
-	courseTagPrefix  = "course-tag-"
-	codioSpecialTag  = "codio-special"
-	codioProvidedTag = "codio-provided"
+	orgTagPrefix          = "org-tag-"
+	userTagPrefix         = "user-tag-"
+	courseTagPrefix       = "course-tag-"
+	codioSpecialTag       = "codio-special"
+	codioProvidedTag      = "codio-provided"
+	statisticsLookbackAge = -5 * 30 * 24 * time.Hour
 )
 
 func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[string]event.CostPack, error) {
@@ -912,26 +930,32 @@ func (s *Store) GetCourseCostPack(courseId string) (*event.CostPack, error) {
 	return s.getTotalCostPack([]string{courseTagPrefix + courseId})
 }
 
-func (s *Store) getUserSpendStatistics(filterTags []string, costTypeTag string) ([]event.BellCurveDataPoint, *event.FinancialKpis, error) {
-	spendByUser, err := s.getUserSpendByTags(filterTags, costTypeTag)
+func (s *Store) getPeriodSpendStatistics(filterTags []string, costTypeTag, period string) (*event.SpendPeriodStatistics, error) {
+	values, err := s.getUserPeriodSpendValues(filterTags, costTypeTag, period)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	values := make([]float64, 0, len(spendByUser))
-	for _, spend := range spendByUser {
-		values = append(values, spend)
+	buckets, err := getBucketsForPeriod(period)
+	if err != nil {
+		return nil, err
 	}
 
-	bellCurve := buildBellCurve(values)
-	kpis := buildFinancialKpis(values)
-	return bellCurve, kpis, nil
+	return &event.SpendPeriodStatistics{
+		BellCurve:     buildBellCurve(values, buckets),
+		FinancialKpis: *buildFinancialKpis(values),
+	}, nil
 }
 
-func (s *Store) getUserSpendByTags(filterTags []string, costTypeTag string) (map[string]float64, error) {
-	args := []any{userTagPrefix, costTypeTag}
-	conditions := []string{"tag LIKE $1 || '%'", "e.tags @> $2"}
-	index := 3
+func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, period string) ([]float64, error) {
+	if period != "day" && period != "week" && period != "month" {
+		return nil, internal_errors.NewValidationError("unsupported period")
+	}
+
+	fiveMonthsAgo := time.Now().Add(statisticsLookbackAge).Unix()
+	args := []any{userTagPrefix, pq.Array([]string{costTypeTag}), fiveMonthsAgo}
+	conditions := []string{"tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3"}
+	index := 4
 
 	for _, tag := range filterTags {
 		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
@@ -940,14 +964,19 @@ func (s *Store) getUserSpendByTags(filterTags []string, costTypeTag string) (map
 	}
 
 	query := fmt.Sprintf(`
-		SELECT
-			regexp_replace(tag, '^' || $1, '') AS user_id,
-			COALESCE(SUM(e.cost_in_usd), 0) AS total_cost
-		FROM events e,
-		LATERAL unnest(e.tags) AS tag
-		WHERE %s
-		GROUP BY user_id
-	`, strings.Join(conditions, " AND "))
+		SELECT user_period_cost
+		FROM (
+			SELECT
+				regexp_replace(tag, '^' || $1, '') AS user_id,
+				date_trunc('%s', to_timestamp(e.created_at)) AS period_start,
+				COALESCE(SUM(e.cost_in_usd), 0) AS user_period_cost
+			FROM events e,
+			LATERAL unnest(e.tags) AS tag
+			WHERE %s
+			GROUP BY user_id, period_start
+		) AS aggregated_user_spend
+		ORDER BY period_start, user_id
+	`, period, strings.Join(conditions, " AND "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -958,45 +987,47 @@ func (s *Store) getUserSpendByTags(filterTags []string, costTypeTag string) (map
 	}
 	defer rows.Close()
 
-	result := make(map[string]float64)
+	values := []float64{}
 	for rows.Next() {
-		var userID string
 		var spend float64
-		if err := rows.Scan(&userID, &spend); err != nil {
+		if err := rows.Scan(&spend); err != nil {
 			return nil, err
 		}
-		result[userID] = spend
+		values = append(values, spend)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	return result, nil
+	return values, nil
 }
 
-func buildBellCurve(values []float64) []event.BellCurveDataPoint {
-	buckets := []struct {
-		label string
-		min   float64
-		max   float64
-	}{
-		{label: "0-10", min: 0, max: 10},
-		{label: "10-20", min: 10, max: 20},
-		{label: "20-30", min: 20, max: 30},
-		{label: "30-50", min: 30, max: 50},
-		{label: "50+", min: 50, max: math.Inf(1)},
-	}
+type costBucket struct {
+	label string
+	max   float64
+}
 
+func getBucketsForPeriod(period string) ([]costBucket, error) {
+	switch period {
+	case "day":
+		return []costBucket{{label: "0-1", max: 1}, {label: "1-3", max: 3}, {label: "3-5", max: 5}, {label: "5-10", max: 10}, {label: "10-20", max: 20}, {label: "20+", max: math.Inf(1)}}, nil
+	case "week":
+		return []costBucket{{label: "0-5", max: 5}, {label: "5-10", max: 10}, {label: "10-20", max: 20}, {label: "20-50", max: 50}, {label: "50-100", max: 100}, {label: "100+", max: math.Inf(1)}}, nil
+	case "month":
+		return []costBucket{{label: "0-10", max: 10}, {label: "10-25", max: 25}, {label: "25-50", max: 50}, {label: "50-100", max: 100}, {label: "100-250", max: 250}, {label: "250+", max: math.Inf(1)}}, nil
+	default:
+		return nil, internal_errors.NewValidationError("unsupported period")
+	}
+}
+
+func buildBellCurve(values []float64, buckets []costBucket) []event.BellCurveDataPoint {
 	counts := make([]int, len(buckets))
 	for _, v := range values {
-		switch {
-		case v < 10:
-			counts[0]++
-		case v < 20:
-			counts[1]++
-		case v < 30:
-			counts[2]++
-		case v < 50:
-			counts[3]++
-		default:
-			counts[4]++
+		for i, bucket := range buckets {
+			if v < bucket.max {
+				counts[i]++
+				break
+			}
 		}
 	}
 
@@ -1004,7 +1035,7 @@ func buildBellCurve(values []float64) []event.BellCurveDataPoint {
 	for i, bucket := range buckets {
 		result = append(result, event.BellCurveDataPoint{
 			CostBucketUsd: bucket.label,
-			UserCount:     counts[i],
+			SampleCount:   counts[i],
 			SerialNo:      i + 1,
 		})
 	}
@@ -1025,19 +1056,39 @@ func buildFinancialKpis(values []float64) *event.FinancialKpis {
 		total += v
 	}
 
-	median := 0.0
-	mid := len(sorted) / 2
-	if len(sorted)%2 == 0 {
-		median = (sorted[mid-1] + sorted[mid]) / 2
-	} else {
-		median = sorted[mid]
-	}
+	p95 := percentile(sorted, 0.95)
+	p99 := percentile(sorted, 0.99)
 
 	return &event.FinancialKpis{
-		MaxUserSpend:    sorted[len(sorted)-1],
-		MedianUserSpend: median,
-		AvgUserSpend:    total / float64(len(sorted)),
+		MaxUserSpend:            sorted[len(sorted)-1],
+		MedianUserSpend:         percentile(sorted, 0.50),
+		AvgUserSpend:            total / float64(len(sorted)),
+		P90UserSpend:            percentile(sorted, 0.90),
+		P95UserSpend:            p95,
+		P99UserSpend:            p99,
+		SampleCount:             len(sorted),
+		RecommendedSoftLimitUsd: p95,
+		RecommendedHardLimitUsd: p99 * 1.2,
 	}
+}
+
+func percentile(sorted []float64, p float64) float64 {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if len(sorted) == 1 {
+		return sorted[0]
+	}
+
+	position := p * float64(len(sorted)-1)
+	lower := int(math.Floor(position))
+	upper := int(math.Ceil(position))
+	if lower == upper {
+		return sorted[lower]
+	}
+
+	weight := position - float64(lower)
+	return sorted[lower] + (sorted[upper]-sorted[lower])*weight
 }
 
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {
