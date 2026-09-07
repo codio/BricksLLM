@@ -832,16 +832,16 @@ func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[str
 
 	query := fmt.Sprintf(`
 		SELECT
-			regexp_replace(tag, '^' || $1, '') AS grouped_id,
+			regexp_replace(tag.tag, '^' || $1, '') AS grouped_id,
 			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
 			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
 			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
 			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
 		FROM events e,
-		LATERAL unnest(e.tags) AS tag
-		WHERE tag LIKE $1 || '%%'
+		LATERAL unnest(e.tags) AS tag(tag)
+		WHERE tag.tag LIKE $1 || '%%'
 			AND %s
-		GROUP BY grouped_id
+		GROUP BY regexp_replace(tag.tag, '^' || $1, '')
 	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
@@ -954,7 +954,7 @@ func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, perio
 
 	fiveMonthsAgo := time.Now().Add(statisticsLookbackAge).Unix()
 	args := []any{userTagPrefix, pq.Array([]string{costTypeTag}), fiveMonthsAgo}
-	conditions := []string{"tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3"}
+	conditions := []string{"tag.tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3"}
 	index := 4
 
 	for _, tag := range filterTags {
@@ -967,16 +967,16 @@ func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, perio
 		SELECT user_period_cost
 		FROM (
 			SELECT
-				regexp_replace(tag, '^' || $1, '') AS user_id,
+				regexp_replace(tag.tag, '^' || $1, '') AS user_id,
 				date_trunc('%s', to_timestamp(e.created_at)) AS period_start,
 				COALESCE(SUM(e.cost_in_usd), 0) AS user_period_cost
 			FROM events e,
-			LATERAL unnest(e.tags) AS tag
+			LATERAL unnest(e.tags) AS tag(tag)
 			WHERE %s
-			GROUP BY user_id, period_start
+			GROUP BY regexp_replace(tag.tag, '^' || $1, ''), date_trunc('%s', to_timestamp(e.created_at))
 		) AS aggregated_user_spend
 		ORDER BY period_start, user_id
-	`, period, strings.Join(conditions, " AND "))
+	`, period, strings.Join(conditions, " AND "), period)
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
