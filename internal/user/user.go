@@ -2,6 +2,7 @@ package user
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -113,7 +114,7 @@ func (u *User) Validate() error {
 			return internal_errors.NewValidationError("rate limit unit can not be empty if rate limit over time is specified")
 		}
 
-		if u.RateLimitUnit != key.HourTimeUnit && u.RateLimitUnit != key.MinuteTimeUnit && u.RateLimitUnit != key.SecondTimeUnit && u.RateLimitUnit != key.DayTimeUnit {
+		if !slices.Contains(key.AllowedTimeUnits, u.RateLimitUnit) {
 			return internal_errors.NewValidationError("rate limit unit can not be identified")
 		}
 	}
@@ -123,7 +124,7 @@ func (u *User) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if u.CostLimitInUsdUnit != key.DayTimeUnit && u.CostLimitInUsdUnit != key.HourTimeUnit && u.CostLimitInUsdUnit != key.MonthTimeUnit && u.CostLimitInUsdUnit != key.MinuteTimeUnit {
+		if !slices.Contains(key.AllowedTimeUnits, u.CostLimitInUsdUnit) {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
@@ -228,7 +229,7 @@ func (uu *UpdateUser) Validate() error {
 			return internal_errors.NewValidationError("rate limit unit can not be empty if rate limit over time is specified")
 		}
 
-		if *uu.RateLimitOverTime != 0 && *uu.RateLimitUnit != key.HourTimeUnit && *uu.RateLimitUnit != key.MinuteTimeUnit && *uu.RateLimitUnit != key.SecondTimeUnit && *uu.RateLimitUnit != key.DayTimeUnit {
+		if *uu.RateLimitOverTime != 0 && !slices.Contains(key.AllowedTimeUnits, *uu.RateLimitUnit) {
 			return internal_errors.NewValidationError("rate limit unit can not be identified")
 		}
 	}
@@ -246,7 +247,7 @@ func (uu *UpdateUser) Validate() error {
 			return internal_errors.NewValidationError("cost limit unit can not be empty if cost limit over time is specified")
 		}
 
-		if *uu.CostLimitInUsdOverTime != 0 && *uu.CostLimitInUsdUnit != key.DayTimeUnit && *uu.CostLimitInUsdUnit != key.HourTimeUnit && *uu.CostLimitInUsdUnit != key.MonthTimeUnit && *uu.CostLimitInUsdUnit != key.MinuteTimeUnit {
+		if *uu.CostLimitInUsdOverTime != 0 && !slices.Contains(key.AllowedTimeUnits, *uu.CostLimitInUsdUnit) {
 			return internal_errors.NewValidationError("cost limit unit can not be identified")
 		}
 	}
