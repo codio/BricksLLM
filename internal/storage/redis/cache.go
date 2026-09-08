@@ -111,6 +111,8 @@ func getCounterTtl(rateLimitUnit key.TimeUnit) (time.Time, error) {
 		return now.Truncate(60 * time.Minute).Add(time.Minute * 60).Add(-time.Millisecond), nil
 	case key.DayTimeUnit:
 		return now.Truncate(24 * time.Hour).Add(time.Hour * 24).Add(-time.Millisecond), nil
+	case key.WeekTimeUnit:
+		return now.Truncate(7 * 24 * time.Hour).Add(7 * 24 * time.Hour).Add(-time.Millisecond), nil
 	case key.MonthTimeUnit:
 		firstDayOfNextMonth := time.Date(now.Year(), now.Month()+1, 1, 0, 0, 0, 0, time.UTC)
 		return firstDayOfNextMonth.Add(-time.Millisecond), nil
@@ -130,6 +132,8 @@ func getCounterTimeStamp(rateLimitUnit key.TimeUnit) (int64, error) {
 		return int64(now.Minute()), nil
 	case key.DayTimeUnit:
 		return int64(now.Hour()), nil
+	case key.WeekTimeUnit:
+		return int64(now.Day()), nil
 	case key.MonthTimeUnit:
 		return int64(now.Day()), nil
 	}
