@@ -6,9 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -703,26 +701,46 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return strings.Compare(a.Id, b.Id)
 		})
 
-		dailySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "day")
+		dailySpecial, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioSpecialTag)
 		if err != nil {
 			return nil, err
 		}
-		weeklySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "week")
+		weeklySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "week")
 		if err != nil {
 			return nil, err
 		}
-		monthlySpecial, err := s.getPeriodSpendStatistics([]string{orgTagPrefix + *id}, codioSpecialTag, "month")
+		monthlySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		dailyProvided, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioProvidedTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklyProvided, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioProvidedTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlyProvided, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioProvidedTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		topFive, err := s.getTopFiveUserSpends([]string{orgTagPrefix + *id})
 		if err != nil {
 			return nil, err
 		}
 
 		result.OrgStatisticsData = &event.OrgStatisticsData{
-			Id:             *id,
-			Costs:          *costs,
-			Courses:        courses,
-			DailySpecial:   *dailySpecial,
-			WeeklySpecial:  *weeklySpecial,
-			MonthlySpecial: *monthlySpecial,
+			Id:                               *id,
+			Costs:                            *costs,
+			Courses:                          courses,
+			DailySpecialDistribution:         dailySpecial,
+			WeeklySpecialDistribution:        weeklySpecial,
+			MonthlySpecialDistribution:       monthlySpecial,
+			DailyCodioProvidedDistribution:   dailyProvided,
+			WeeklyCodioProvidedDistribution:  weeklyProvided,
+			MonthlyCodioProvidedDistribution: monthlyProvided,
+			TopFive:                          topFive,
 		}
 	case event.StisticLevels.Course:
 		if id == nil || len(*id) == 0 {
@@ -734,25 +752,45 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return nil, err
 		}
 
-		dailyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "day")
+		dailySpecial, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioSpecialTag)
 		if err != nil {
 			return nil, err
 		}
-		weeklyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "week")
+		weeklySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "week")
 		if err != nil {
 			return nil, err
 		}
-		monthlyProvided, err := s.getPeriodSpendStatistics([]string{courseTagPrefix + *id}, codioProvidedTag, "month")
+		monthlySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		dailyProvided, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioProvidedTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklyProvided, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioProvidedTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlyProvided, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioProvidedTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		topFive, err := s.getTopFiveUserSpends([]string{courseTagPrefix + *id})
 		if err != nil {
 			return nil, err
 		}
 
 		result.CourseStatisticsData = &event.CourseStatisticsData{
-			Id:                   *id,
-			Costs:                *costs,
-			DailyCodioProvided:   *dailyProvided,
-			WeeklyCodioProvided:  *weeklyProvided,
-			MonthlyCodioProvided: *monthlyProvided,
+			Id:                               *id,
+			Costs:                            *costs,
+			DailySpecialDistribution:         dailySpecial,
+			WeeklySpecialDistribution:        weeklySpecial,
+			MonthlySpecialDistribution:       monthlySpecial,
+			DailyCodioProvidedDistribution:   dailyProvided,
+			WeeklyCodioProvidedDistribution:  weeklyProvided,
+			MonthlyCodioProvidedDistribution: monthlyProvided,
+			TopFive:                          topFive,
 		}
 	default:
 		return nil, internal_errors.NewValidationError("invalid level")
@@ -930,31 +968,167 @@ func (s *Store) GetCourseCostPack(courseId string) (*event.CostPack, error) {
 	return s.getTotalCostPack([]string{courseTagPrefix + courseId})
 }
 
-func (s *Store) getPeriodSpendStatistics(filterTags []string, costTypeTag, period string) (*event.SpendPeriodStatistics, error) {
-	values, err := s.getUserPeriodSpendValues(filterTags, costTypeTag, period)
+func (s *Store) getDailyDistribution(filterTags []string, costTypeTag string) ([]event.DailySpendDistributionDataPoint, error) {
+	start := beginningOfDay(time.Now().UTC()).AddDate(0, 0, -29)
+	end := beginningOfDay(time.Now().UTC()).AddDate(0, 0, 1)
+
+	rows, err := s.getPeriodKpisRows(filterTags, costTypeTag, "day", start, end)
 	if err != nil {
 		return nil, err
 	}
 
-	buckets, err := getBucketsForPeriod(period)
-	if err != nil {
-		return nil, err
+	rowMap := make(map[string]financialKpiRow, len(rows))
+	for _, row := range rows {
+		rowMap[row.periodStart.Format("2006-01-02")] = row
 	}
 
-	return &event.SpendPeriodStatistics{
-		BellCurve:     buildBellCurve(values, buckets),
-		FinancialKpis: *buildFinancialKpis(values),
-	}, nil
+	result := make([]event.DailySpendDistributionDataPoint, 0, 30)
+	for current := start; current.Before(end); current = current.AddDate(0, 0, 1) {
+		key := current.Format("2006-01-02")
+		row, ok := rowMap[key]
+		if !ok {
+			result = append(result, event.DailySpendDistributionDataPoint{Date: key})
+			continue
+		}
+		result = append(result, event.DailySpendDistributionDataPoint{
+			MaxUserSpend:    row.max,
+			MedianUserSpend: row.median,
+			AvgUserSpend:    row.avg,
+			P95UserSpend:    row.p95,
+			P99UserSpend:    row.p99,
+			Date:            key,
+		})
+	}
+
+	return result, nil
 }
 
-func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, period string) ([]float64, error) {
-	if period != "day" && period != "week" && period != "month" {
+func (s *Store) getPeriodDistribution(filterTags []string, costTypeTag, period string) ([]event.PeriodSpendDistributionDataPoint, error) {
+	var start time.Time
+	var end time.Time
+
+	now := time.Now().UTC()
+	switch period {
+	case "week":
+		start = beginningOfWeek(now).AddDate(0, 0, -7*20)
+		end = beginningOfWeek(now).AddDate(0, 0, 7)
+	case "month":
+		start = beginningOfMonth(now).AddDate(0, -4, 0)
+		end = beginningOfMonth(now).AddDate(0, 1, 0)
+	default:
 		return nil, internal_errors.NewValidationError("unsupported period")
 	}
 
-	fiveMonthsAgo := time.Now().Add(statisticsLookbackAge).Unix()
-	args := []any{userTagPrefix, pq.Array([]string{costTypeTag}), fiveMonthsAgo}
-	conditions := []string{"tag.tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3"}
+	lookbackStart := time.Now().UTC().Add(statisticsLookbackAge)
+	if start.Before(lookbackStart) {
+		start = truncateToPeriodStart(lookbackStart, period)
+	}
+
+	rows, err := s.getPeriodKpisRows(filterTags, costTypeTag, period, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	rowMap := make(map[string]financialKpiRow, len(rows))
+	for _, row := range rows {
+		rowMap[formatPeriodLabel(row.periodStart, period)] = row
+	}
+
+	result := []event.PeriodSpendDistributionDataPoint{}
+	for current := start; current.Before(end); current = addPeriod(current, period) {
+		label := formatPeriodLabel(current, period)
+		row, ok := rowMap[label]
+		if !ok {
+			result = append(result, event.PeriodSpendDistributionDataPoint{DatePeriod: label})
+			continue
+		}
+		result = append(result, event.PeriodSpendDistributionDataPoint{
+			MaxUserSpend:    row.max,
+			MedianUserSpend: row.median,
+			AvgUserSpend:    row.avg,
+			P95UserSpend:    row.p95,
+			P99UserSpend:    row.p99,
+			DatePeriod:      label,
+		})
+	}
+
+	return result, nil
+}
+
+type financialKpiRow struct {
+	periodStart time.Time
+	max         float64
+	median      float64
+	avg         float64
+	p95         float64
+	p99         float64
+}
+
+func (s *Store) getPeriodKpisRows(filterTags []string, costTypeTag, period string, start, end time.Time) ([]financialKpiRow, error) {
+	args := []any{userTagPrefix, pq.Array([]string{costTypeTag}), start.Unix(), end.Unix()}
+	conditions := []string{"tag.tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3", "e.created_at < $4"}
+	index := 5
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	periodExpr := fmt.Sprintf("date_trunc('%s', timezone('UTC', to_timestamp(e.created_at)))", period)
+	query := fmt.Sprintf(`
+		WITH per_user_period AS (
+			SELECT
+				%s AS period_start,
+				regexp_replace(tag.tag, '^' || $1, '') AS user_id,
+				COALESCE(SUM(e.cost_in_usd), 0) AS user_period_cost
+			FROM events e,
+			LATERAL unnest(e.tags) AS tag(tag)
+			WHERE %s
+			GROUP BY %s, regexp_replace(tag.tag, '^' || $1, '')
+		)
+		SELECT
+			period_start,
+			COALESCE(MAX(user_period_cost), 0) AS max_user_spend,
+			COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY user_period_cost), 0) AS median_user_spend,
+			COALESCE(AVG(user_period_cost), 0) AS avg_user_spend,
+			COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY user_period_cost), 0) AS p95_user_spend,
+			COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY user_period_cost), 0) AS p99_user_spend
+		FROM per_user_period
+		GROUP BY period_start
+		ORDER BY period_start
+	`, periodExpr, strings.Join(conditions, " AND "), periodExpr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	queryRows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer queryRows.Close()
+
+	result := []financialKpiRow{}
+	for queryRows.Next() {
+		var row financialKpiRow
+		if err := queryRows.Scan(&row.periodStart, &row.max, &row.median, &row.avg, &row.p95, &row.p99); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	if err := queryRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *Store) getTopFiveUserSpends(filterTags []string) ([]event.TopFiveUserSpend, error) {
+	start := beginningOfMonth(time.Now().UTC())
+	end := beginningOfMonth(time.Now().UTC()).AddDate(0, 1, 0)
+
+	args := []any{userTagPrefix, start.Unix(), end.Unix()}
+	conditions := []string{"tag.tag LIKE $1 || '%'", "e.created_at >= $2", "e.created_at < $3"}
 	index := 4
 
 	for _, tag := range filterTags {
@@ -964,19 +1138,16 @@ func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, perio
 	}
 
 	query := fmt.Sprintf(`
-		SELECT user_period_cost
-		FROM (
-			SELECT
-				regexp_replace(tag.tag, '^' || $1, '') AS user_id,
-				date_trunc('%s', to_timestamp(e.created_at)) AS period_start,
-				COALESCE(SUM(e.cost_in_usd), 0) AS user_period_cost
-			FROM events e,
-			LATERAL unnest(e.tags) AS tag(tag)
-			WHERE %s
-			GROUP BY regexp_replace(tag.tag, '^' || $1, ''), date_trunc('%s', to_timestamp(e.created_at))
-		) AS aggregated_user_spend
-		ORDER BY period_start, user_id
-	`, period, strings.Join(conditions, " AND "), period)
+		SELECT
+			regexp_replace(tag.tag, '^' || $1, '') AS user_id,
+			COALESCE(SUM(e.cost_in_usd), 0) AS spend_last_month
+		FROM events e,
+		LATERAL unnest(e.tags) AS tag(tag)
+		WHERE %s
+		GROUP BY regexp_replace(tag.tag, '^' || $1, '')
+		ORDER BY spend_last_month DESC, user_id ASC
+		LIMIT 5
+	`, strings.Join(conditions, " AND "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -987,108 +1158,72 @@ func (s *Store) getUserPeriodSpendValues(filterTags []string, costTypeTag, perio
 	}
 	defer rows.Close()
 
-	values := []float64{}
+	result := []event.TopFiveUserSpend{}
 	for rows.Next() {
-		var spend float64
-		if err := rows.Scan(&spend); err != nil {
+		var row event.TopFiveUserSpend
+		if err := rows.Scan(&row.UserId, &row.SpendLastMonth); err != nil {
 			return nil, err
 		}
-		values = append(values, spend)
+		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	return values, nil
+	return result, nil
 }
 
-type costBucket struct {
-	label string
-	max   float64
+func beginningOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
-func getBucketsForPeriod(period string) ([]costBucket, error) {
+func beginningOfWeek(t time.Time) time.Time {
+	dayStart := beginningOfDay(t)
+	weekday := int(dayStart.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return dayStart.AddDate(0, 0, -(weekday - 1))
+}
+
+func beginningOfMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func truncateToPeriodStart(t time.Time, period string) time.Time {
 	switch period {
 	case "day":
-		return []costBucket{{label: "0-1", max: 1}, {label: "1-3", max: 3}, {label: "3-5", max: 5}, {label: "5-10", max: 10}, {label: "10-20", max: 20}, {label: "20+", max: math.Inf(1)}}, nil
+		return beginningOfDay(t)
 	case "week":
-		return []costBucket{{label: "0-5", max: 5}, {label: "5-10", max: 10}, {label: "10-20", max: 20}, {label: "20-50", max: 50}, {label: "50-100", max: 100}, {label: "100+", max: math.Inf(1)}}, nil
+		return beginningOfWeek(t)
 	case "month":
-		return []costBucket{{label: "0-10", max: 10}, {label: "10-25", max: 25}, {label: "25-50", max: 50}, {label: "50-100", max: 100}, {label: "100-250", max: 250}, {label: "250+", max: math.Inf(1)}}, nil
+		return beginningOfMonth(t)
 	default:
-		return nil, internal_errors.NewValidationError("unsupported period")
+		return beginningOfDay(t)
 	}
 }
 
-func buildBellCurve(values []float64, buckets []costBucket) []event.BellCurveDataPoint {
-	counts := make([]int, len(buckets))
-	for _, v := range values {
-		for i, bucket := range buckets {
-			if v < bucket.max {
-				counts[i]++
-				break
-			}
-		}
-	}
-
-	result := make([]event.BellCurveDataPoint, 0, len(buckets))
-	for i, bucket := range buckets {
-		result = append(result, event.BellCurveDataPoint{
-			CostBucketUsd: bucket.label,
-			SampleCount:   counts[i],
-			SerialNo:      i + 1,
-		})
-	}
-
-	return result
-}
-
-func buildFinancialKpis(values []float64) *event.FinancialKpis {
-	if len(values) == 0 {
-		return &event.FinancialKpis{}
-	}
-
-	sorted := append([]float64(nil), values...)
-	sort.Float64s(sorted)
-
-	total := 0.0
-	for _, v := range sorted {
-		total += v
-	}
-
-	p95 := percentile(sorted, 0.95)
-	p99 := percentile(sorted, 0.99)
-
-	return &event.FinancialKpis{
-		MaxUserSpend:            sorted[len(sorted)-1],
-		MedianUserSpend:         percentile(sorted, 0.50),
-		AvgUserSpend:            total / float64(len(sorted)),
-		P90UserSpend:            percentile(sorted, 0.90),
-		P95UserSpend:            p95,
-		P99UserSpend:            p99,
-		SampleCount:             len(sorted),
-		RecommendedSoftLimitUsd: p95,
-		RecommendedHardLimitUsd: p99 * 1.2,
+func addPeriod(t time.Time, period string) time.Time {
+	switch period {
+	case "week":
+		return t.AddDate(0, 0, 7)
+	case "month":
+		return t.AddDate(0, 1, 0)
+	default:
+		return t.AddDate(0, 0, 1)
 	}
 }
 
-func percentile(sorted []float64, p float64) float64 {
-	if len(sorted) == 0 {
-		return 0
+func formatPeriodLabel(start time.Time, period string) string {
+	switch period {
+	case "week":
+		end := start.AddDate(0, 0, 6)
+		return fmt.Sprintf("%s/%s", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	case "month":
+		return start.Format("2006-01")
+	default:
+		return start.Format("2006-01-02")
 	}
-	if len(sorted) == 1 {
-		return sorted[0]
-	}
-
-	position := p * float64(len(sorted)-1)
-	lower := int(math.Floor(position))
-	upper := int(math.Ceil(position))
-	if lower == upper {
-		return sorted[lower]
-	}
-
-	weight := position - float64(lower)
-	return sorted[lower] + (sorted[upper]-sorted[lower])*weight
 }
 
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {

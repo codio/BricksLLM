@@ -147,12 +147,6 @@ type CostPack struct {
 	CodioSpecial  Cost `json:"codioSpecial"`
 }
 
-type BellCurveDataPoint struct {
-	CostBucketUsd string `json:"costBucketUsd"`
-	SampleCount   int    `json:"sampleCount"`
-	SerialNo      int    `json:"serialNo"`
-}
-
 type FinancialKpis struct {
 	MaxUserSpend            float64 `json:"maxUserSpend"`
 	MedianUserSpend         float64 `json:"medianUserSpend"`
@@ -165,9 +159,22 @@ type FinancialKpis struct {
 	RecommendedHardLimitUsd float64 `json:"recommendedHardLimitUsd"`
 }
 
-type SpendPeriodStatistics struct {
-	BellCurve     []BellCurveDataPoint `json:"bellCurve"`
-	FinancialKpis FinancialKpis        `json:"financialKpis"`
+type DailySpendDistributionDataPoint struct {
+	MaxUserSpend    float64 `json:"maxUserSpend"`
+	MedianUserSpend float64 `json:"medianUserSpend"`
+	AvgUserSpend    float64 `json:"avgUserSpend"`
+	P95UserSpend    float64 `json:"p95UserSpend"`
+	P99UserSpend    float64 `json:"p99UserSpend"`
+	Date            string  `json:"date"`
+}
+
+type PeriodSpendDistributionDataPoint struct {
+	MaxUserSpend    float64 `json:"maxUserSpend"`
+	MedianUserSpend float64 `json:"medianUserSpend"`
+	AvgUserSpend    float64 `json:"avgUserSpend"`
+	P95UserSpend    float64 `json:"p95UserSpend"`
+	P99UserSpend    float64 `json:"p99UserSpend"`
+	DatePeriod      string  `json:"datePeriod"`
 }
 
 type AllStatisticsData struct {
@@ -185,19 +192,32 @@ type ShortCourseStatisticsData struct {
 	Costs CostPack `json:"costs"`
 }
 
+type TopFiveUserSpend struct {
+	UserId         string  `json:"userId"`
+	SpendLastMonth float64 `json:"spendLastMonth"`
+}
+
 type OrgStatisticsData struct {
-	Id             string                      `json:"id"`
-	Costs          CostPack                    `json:"costs"`
-	Courses        []ShortCourseStatisticsData `json:"courses"`
-	DailySpecial   SpendPeriodStatistics       `json:"dailySpecial"`
-	WeeklySpecial  SpendPeriodStatistics       `json:"weeklySpecial"`
-	MonthlySpecial SpendPeriodStatistics       `json:"monthlySpecial"`
+	Id                               string                             `json:"id"`
+	Costs                            CostPack                           `json:"costs"`
+	Courses                          []ShortCourseStatisticsData        `json:"courses"`
+	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
+	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
+	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
+	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
+	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
+	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
+	TopFive                          []TopFiveUserSpend                 `json:"topFive"`
 }
 
 type CourseStatisticsData struct {
-	Id                   string                `json:"id"`
-	Costs                CostPack              `json:"costs"`
-	DailyCodioProvided   SpendPeriodStatistics `json:"dailyCodioProvided"`
-	WeeklyCodioProvided  SpendPeriodStatistics `json:"weeklyCodioProvided"`
-	MonthlyCodioProvided SpendPeriodStatistics `json:"monthlyCodioProvided"`
+	Id                               string                             `json:"id"`
+	Costs                            CostPack                           `json:"costs"`
+	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
+	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
+	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
+	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
+	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
+	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
+	TopFive                          []TopFiveUserSpend                 `json:"topFive"`
 }
