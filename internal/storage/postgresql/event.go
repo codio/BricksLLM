@@ -799,51 +799,6 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 	return result, nil
 }
 
-// {
-//   "total": costPack,
-//   "orgs": [
-//     {
-//       "id": string,
-//       "costs": costPack,
-//     },
-//   ]
-// }
-//
-//   val ORG_TAG_PREFIX = "org-tag-"
-// val USER_TAG_PREFIX = "user-tag-"
-// val COURSE_TAG_PREFIX = "course-tag-"
-//
-// val CODIO_SPECIAL_TAG = "codio-special"
-// val CODIO_PROVIDED_TAG = "codio-provided"
-//
-// type Cost struct {
-// 	OneMonth float64 `json:"1month"`
-// 	FiveMonth float64 `json:"5month"`
-// }
-
-// type CostPack struct {
-// 	CodioProvided Cost `json:"codioProvided"`
-// 	CodioSpecial  Cost `json:"codioSpecial"`
-// }
-//
-// SELECT
-//     substring(elem FROM 'org-tag-(.+)') AS user_id,
-//     count(*) AS total_records
-// FROM
-//     your_table,
-//     unnest(your_array_column) AS elem
-// WHERE
-//     elem LIKE 'org-tag--%'
-// GROUP BY
-//     user_id;
-//
-//
-//
-
-// "event_id"	"created_at"	"tags"	"key_id"	"cost_in_usd"	"provider"	"model"	"status_code"	"prompt_token_count"	"completion_token_count"	"latency_in_ms"	"path"	"method"	"custom_id"	"request"	"response"	"user_id"	"action"	"policy_id"	"route_id"	"correlation_id"	"metadata"
-// "0df9bc37-0e76-4192-ad43-d721acf6d638"	1785927977	"{org-tag-134db24b-62c3-44f5-b929-ec668f13d98b,user-tag-00112233-4455-6677-9cef-5b5dd134bfbf,course-tag-44e1ee81b625dbb97e4b5f2c57ab3183,codio-special}"	"a950fce4-f91a-4195-9202-24480956d2f7"	0	"openai"	"gpt-5.4-nano"	401	0	0	266	"/api/providers/openai/v1/responses"	"POST"		"{""input"": [{""role"": ""user"", ""content"": [{""text"": ""hello"", ""type"": ""input_text""}]}], ""model"": ""gpt-5.4-nano"", ""stream"": true}"	"{}"					"6a797d0f-5480-4d8c-bf7a-931f97e00666"	"{}"
-//
-
 const (
 	orgTagPrefix          = "org-tag-"
 	userTagPrefix         = "user-tag-"
