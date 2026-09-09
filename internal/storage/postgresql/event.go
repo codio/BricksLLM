@@ -934,12 +934,12 @@ func (s *Store) getDailyDistribution(filterTags []string, costTypeTag string) ([
 
 	rowMap := make(map[string]financialKpiRow, len(rows))
 	for _, row := range rows {
-		rowMap[row.periodStart.Format("2006-01-02")] = row
+		rowMap[row.periodStart.Format("Jan-02")] = row
 	}
 
 	result := make([]event.DailySpendDistributionDataPoint, 0, 30)
 	for current := start; current.Before(end); current = current.AddDate(0, 0, 1) {
-		key := current.Format("2006-01-02")
+		key := current.Format("Jan-02")
 		row, ok := rowMap[key]
 		if !ok {
 			result = append(result, event.DailySpendDistributionDataPoint{Date: key})
@@ -1173,11 +1173,11 @@ func formatPeriodLabel(start time.Time, period string) string {
 	switch period {
 	case "week":
 		end := start.AddDate(0, 0, 6)
-		return fmt.Sprintf("%s/%s", start.Format("2006-01-02"), end.Format("2006-01-02"))
+		return fmt.Sprintf("%s/%s", start.Format("Jan-02"), end.Format("Jan-02"))
 	case "month":
-		return start.Format("2006-01")
+		return start.Format("Jan")
 	default:
-		return start.Format("2006-01-02")
+		return start.Format("Jan-02")
 	}
 }
 
