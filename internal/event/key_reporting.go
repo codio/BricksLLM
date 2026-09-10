@@ -86,6 +86,13 @@ type StatisticsRequest struct {
 	Id    *string `json:"id"`
 }
 
+func (r *StatisticsRequest) GetCacheKey() string {
+	if r.Id != nil {
+		return r.Level + ":" + *r.Id
+	}
+	return r.Level
+}
+
 type StatisticLevel string
 
 var StisticLevels = struct {

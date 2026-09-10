@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -607,6 +608,13 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 			telemetry.Incr("bricksllm.admin.get_get_statistic_handler.get_statistic", nil, 1)
 
 			logError(log, "error when getting top key ring reporting", prod, err)
+
+			if _, ok := err.(*errors.NotFoundError); ok {
+				fmt.Println("NotFoundError:", err.Error())
+				c.JSON(http.StatusAccepted, &gin.H{"status": "in_progress", "message": "statistics data is being collected, please try again later"})
+				return
+			}
+
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/event-reporting-manager",
 				Title:    "usage reporting error",

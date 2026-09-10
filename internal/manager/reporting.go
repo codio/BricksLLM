@@ -2,6 +2,7 @@ package manager
 
 import (
 	"strings"
+	"time"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
@@ -19,6 +20,14 @@ type keyStorage interface {
 
 type keyValidator interface {
 	Validate(k *key.ResponseKey, promptCost float64) error
+}
+
+type StatisticsCache interface {
+	Get(key string) (*event.StatisticsData, error)
+	Set(key string, val *event.StatisticsData, ttl time.Duration) error
+	SetInProgress(key string) error
+	DeleteInProgress(key string) error
+	IsInProgress(key string) bool
 }
 
 type eventStorage interface {
@@ -41,14 +50,16 @@ type ReportingManager struct {
 	cs costStorage
 	ks keyStorage
 	kv keyValidator
+	sc StatisticsCache
 }
 
-func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, kv keyValidator) *ReportingManager {
+func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, kv keyValidator, sc StatisticsCache) *ReportingManager {
 	return &ReportingManager{
 		cs: cs,
 		ks: ks,
 		es: es,
 		kv: kv,
+		sc: sc,
 	}
 }
 
@@ -197,14 +208,49 @@ func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.Sta
 		return nil, err
 	}
 
-	statisticsData, err := rm.es.GetStatisticsData(r.GetLevel(), r.Id)
-	if err != nil {
-		return nil, err
+	cacheKey := r.GetCacheKey()
+	if data, err := rm.sc.Get(cacheKey); err == nil {
+		return &event.StatisticsResponse{
+			StatisticsData: data,
+		}, nil
 	}
 
-	return &event.StatisticsResponse{
-		StatisticsData: statisticsData,
-	}, nil
+	go rm.backgroundCollectStatisticsData(cacheKey, r.GetLevel(), r.Id)
+
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return nil, internal_errors.NewNotFoundError("statistics data is not ready yet, please try again later")
+		case <-ticker.C:
+			if data, err := rm.sc.Get(cacheKey); err == nil {
+				return &event.StatisticsResponse{
+					StatisticsData: data,
+				}, nil
+			}
+		}
+	}
+}
+
+func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, level event.StatisticLevel, id *string) {
+	if rm.sc.IsInProgress(cacheKey) {
+		return
+	}
+	err := rm.sc.SetInProgress(cacheKey)
+	if err != nil {
+		return
+	}
+	defer rm.sc.DeleteInProgress(cacheKey)
+
+	statisticsData, err := rm.es.GetStatisticsData(level, id)
+
+	if err != nil {
+		return
+	}
+	_ = rm.sc.Set(cacheKey, statisticsData, time.Hour*24)
 }
 
 func (rm *ReportingManager) GetCustomIds(keyId string) ([]string, error) {
