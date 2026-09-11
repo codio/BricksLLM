@@ -322,7 +322,7 @@ func main() {
 	requestsLimitStorage := redisStorage.NewStore(requestsLimitRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	statisticsCache := redisStorage.NewStatisticCache(statisticsRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
-	encryptor, err := encryptor.NewEncryptor(cfg.DecryptionEndpoint, cfg.EncryptionEndpoint, cfg.EnableEncrytion, cfg.EncryptionTimeout, cfg.Audience)
+	encrypt, err := encryptor.NewEncryptor(cfg.DecryptionEndpoint, cfg.EncryptionEndpoint, cfg.EnableEncrytion, cfg.EncryptionTimeout, cfg.Audience)
 	if cfg.EnableEncrytion && err != nil {
 		log.Sugar().Fatalf("error creating encryption client: %v", err)
 	}
@@ -330,13 +330,13 @@ func main() {
 
 	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache, secondaryKeysCache, requestsLimitStorage)
 	krm := manager.NewReportingManager(costStorage, store, store, v, statisticsCache)
-	psm := manager.NewProviderSettingsManager(store, psCache, encryptor)
+	psm := manager.NewProviderSettingsManager(store, psCache, encrypt)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
 	rm := manager.NewRouteManager(store, store, rMemStore, psm)
 	pm := manager.NewPolicyManager(store, rMemStore)
 	um := manager.NewUserManager(store, store)
 
-	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.XCodioSignSecret)
+	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um)
 	if err != nil {
 		log.Sugar().Fatalf("error creating admin http server: %v", err)
 	}
@@ -367,7 +367,7 @@ func main() {
 
 	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store, requestsLimitStorage)
 	rlm := manager.NewRateLimitManager(rateLimitCache, userRateLimitCache)
-	a := auth.NewAuthenticator(psm, m, rm, store, encryptor)
+	a := auth.NewAuthenticator(psm, m, rm, store, encrypt)
 
 	c := cache.NewCache(apiCache)
 
