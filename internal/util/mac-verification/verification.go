@@ -13,7 +13,7 @@ import (
 	"github.com/google/tink/go/tink"
 )
 
-const keySetDir = "./tink"
+const keySetSubDir = "./tink"
 
 var macCache map[string]tink.MAC = make(map[string]tink.MAC)
 
@@ -25,6 +25,12 @@ func init() {
 }
 
 func loadKeySets() error {
+	execDir, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("error getting executable path: %v", err)
+	}
+	execDir = filepath.Dir(execDir)
+	keySetDir := filepath.Join(execDir, keySetSubDir)
 	files, err := os.ReadDir(keySetDir)
 	if err != nil {
 		return fmt.Errorf("error reading directory %s: %v", keySetDir, err)
