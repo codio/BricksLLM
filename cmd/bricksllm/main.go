@@ -336,7 +336,7 @@ func main() {
 	pm := manager.NewPolicyManager(store, rMemStore)
 	um := manager.NewUserManager(store, store)
 
-	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.AdminPass, cfg.XCodioSignSecret)
+	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.XCodioSignSecret)
 	if err != nil {
 		log.Sugar().Fatalf("error creating admin http server: %v", err)
 	}
