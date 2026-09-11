@@ -655,7 +655,7 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 	result := &event.StatisticsData{}
 
 	switch level {
-	case event.StisticLevels.All:
+	case event.StaticLevels.All:
 		total, err := s.getTotalCostPack(nil)
 		if err != nil {
 			return nil, err
@@ -678,7 +678,7 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			Total: *total,
 			Orgs:  orgs,
 		}
-	case event.StisticLevels.Org:
+	case event.StaticLevels.Org:
 		if id == nil || len(*id) == 0 {
 			return nil, internal_errors.NewValidationError("id must be provided when level is 'org'")
 		}
@@ -742,7 +742,7 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			MonthlyCodioProvidedDistribution: monthlyProvided,
 			TopFive:                          topFive,
 		}
-	case event.StisticLevels.Course:
+	case event.StaticLevels.Course:
 		if id == nil || len(*id) == 0 {
 			return nil, internal_errors.NewValidationError("id must be provided when level is 'course'")
 		}
@@ -851,17 +851,20 @@ func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[str
 		var id string
 		var pack event.CostPack
 
-		if err := rows.Scan(
+		if err2 := rows.Scan(
 			&id,
 			&pack.CodioProvided.OneMonth,
 			&pack.CodioProvided.FiveMonth,
 			&pack.CodioSpecial.OneMonth,
 			&pack.CodioSpecial.FiveMonth,
-		); err != nil {
-			return nil, err
+		); err2 != nil {
+			return nil, err2
 		}
 
 		result[id] = pack
+	}
+	if err2 := rows.Err(); err2 != nil {
+		return nil, err2
 	}
 
 	return result, nil
@@ -1079,8 +1082,8 @@ func (s *Store) getPeriodKpisRows(filterTags []string, costTypeTag, period strin
 }
 
 func (s *Store) getTopFiveUserSpends(filterTags []string) ([]event.TopFiveUserSpend, error) {
-	start := beginningOfMonth(time.Now().UTC())
-	end := beginningOfMonth(time.Now().UTC()).AddDate(0, 1, 0)
+	end := time.Now().UTC()
+	start := end.Add(-30 * 24 * time.Hour)
 
 	args := []any{userTagPrefix, start.Unix(), end.Unix()}
 	conditions := []string{"tag.tag LIKE $1 || '%'", "e.created_at >= $2", "e.created_at < $3"}

@@ -94,10 +94,7 @@ func (c *StatisticCache) IsInProgress(key string) bool {
 	k := inProgressKeyPrefix + key
 	ctx, cancel := context.WithTimeout(context.Background(), c.rt)
 	defer cancel()
-
-	result := c.client.Get(ctx, k)
-
-	return !errors.Is(result.Err(), redis.Nil)
+	return c.client.Get(ctx, k).Err() == nil
 }
 
 func (c *StatisticCache) DeleteInProgress(key string) error {

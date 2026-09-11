@@ -1,6 +1,8 @@
 package event
 
 import (
+	"strings"
+
 	internalErrors "github.com/bricks-cloud/bricksllm/internal/errors"
 )
 
@@ -87,6 +89,9 @@ type StatisticsRequest struct {
 }
 
 func (r *StatisticsRequest) GetCacheKey() string {
+	if r.Level == "all" {
+		return r.Level
+	}
 	if r.Id != nil {
 		return r.Level + ":" + *r.Id
 	}
@@ -95,7 +100,7 @@ func (r *StatisticsRequest) GetCacheKey() string {
 
 type StatisticLevel string
 
-var StisticLevels = struct {
+var StaticLevels = struct {
 	Unknown StatisticLevel
 	All     StatisticLevel
 	Org     StatisticLevel
@@ -110,13 +115,13 @@ var StisticLevels = struct {
 func StatisticLevelFromStr(s string) StatisticLevel {
 	switch s {
 	case "all":
-		return StisticLevels.All
+		return StaticLevels.All
 	case "org":
-		return StisticLevels.Org
+		return StaticLevels.Org
 	case "course":
-		return StisticLevels.Course
+		return StaticLevels.Course
 	default:
-		return StisticLevels.Unknown
+		return StaticLevels.Unknown
 	}
 }
 
@@ -124,7 +129,7 @@ func (r *StatisticsRequest) Validate() error {
 	if r.Level != "all" && r.Level != "org" && r.Level != "course" {
 		return internalErrors.NewValidationError("level must be one of 'all', 'org', or 'course'")
 	}
-	if (r.Level == "org" || r.Level == "course") && r.Id == nil {
+	if (r.Level == "org" || r.Level == "course") && (r.Id == nil || strings.TrimSpace(*r.Id) == "") {
 		return internalErrors.NewValidationError("id must be provided when level is 'org' or 'course'")
 	}
 	return nil

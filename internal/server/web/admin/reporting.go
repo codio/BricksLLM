@@ -578,7 +578,7 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 
 		data, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			logError(log, "error when reading usage reporting request body", prod, err)
+			logError(log, "error when reading statistics request body", prod, err)
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/request-body-read",
 				Title:    "request body reader error",
@@ -607,7 +607,7 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 		if err != nil {
 			telemetry.Incr("bricksllm.admin.get_get_statistic_handler.get_statistic", nil, 1)
 
-			logError(log, "error when getting top key ring reporting", prod, err)
+			logError(log, "error when getting statistics", prod, err)
 
 			if _, ok := err.(*errors.NotFoundError); ok {
 				fmt.Println("NotFoundError:", err.Error())
@@ -617,7 +617,7 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/event-reporting-manager",
-				Title:    "usage reporting error",
+				Title:    "statistics reporting error",
 				Status:   http.StatusInternalServerError,
 				Detail:   err.Error(),
 				Instance: path,
