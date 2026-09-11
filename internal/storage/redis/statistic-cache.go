@@ -79,22 +79,11 @@ func (c *StatisticCache) Get(key string) (*event.StatisticsData, error) {
 	return &stat, nil
 }
 
-func (c *StatisticCache) SetInProgress(key string) error {
+func (c *StatisticCache) TryMarkInProgress(key string) (bool, error) {
 	k := inProgressKeyPrefix + key
 	ctx, cancel := context.WithTimeout(context.Background(), c.wt)
 	defer cancel()
-	err := c.client.Set(ctx, k, true, time.Minute*10).Err()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (c *StatisticCache) IsInProgress(key string) bool {
-	k := inProgressKeyPrefix + key
-	ctx, cancel := context.WithTimeout(context.Background(), c.rt)
-	defer cancel()
-	return c.client.Get(ctx, k).Err() == nil
+	return c.client.SetNX(ctx, k, true, time.Minute*10).Result()
 }
 
 func (c *StatisticCache) DeleteInProgress(key string) error {

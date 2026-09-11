@@ -25,9 +25,8 @@ type keyValidator interface {
 type StatisticsCache interface {
 	Get(key string) (*event.StatisticsData, error)
 	Set(key string, val *event.StatisticsData, ttl time.Duration) error
-	SetInProgress(key string) error
+	TryMarkInProgress(key string) (bool, error)
 	DeleteInProgress(key string) error
-	IsInProgress(key string) bool
 }
 
 type eventStorage interface {
@@ -236,11 +235,8 @@ func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.Sta
 }
 
 func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, level event.StatisticLevel, id *string) {
-	if rm.sc.IsInProgress(cacheKey) {
-		return
-	}
-	err := rm.sc.SetInProgress(cacheKey)
-	if err != nil {
+	claimed, err := rm.sc.TryMarkInProgress(cacheKey)
+	if err != nil || !claimed {
 		return
 	}
 	defer rm.sc.DeleteInProgress(cacheKey)
