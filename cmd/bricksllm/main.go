@@ -297,6 +297,14 @@ func main() {
 		log.Sugar().Fatalf("error connecting to secondary keys redis storage: %v", err)
 	}
 
+	statisticsRedisCache := redis.NewClient(defaultRedisOption(cfg, 13))
+
+	ctx, cancel = context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err = statisticsRedisCache.Ping(ctx).Err(); err != nil {
+		log.Sugar().Fatalf("error connecting to statistics redis storage: %v", err)
+	}
+
 	rateLimitCache := redisStorage.NewCache(rateLimitRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	costLimitCache := redisStorage.NewCache(costLimitRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	costStorage := redisStorage.NewStore(costRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
@@ -312,22 +320,23 @@ func main() {
 	keysCache := redisStorage.NewKeysCache(keysRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	secondaryKeysCache := redisStorage.NewSecondaryKeysCache(secondaryKeysRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 	requestsLimitStorage := redisStorage.NewStore(requestsLimitRedisStorage, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
+	statisticsCache := redisStorage.NewStatisticCache(statisticsRedisCache, cfg.RedisWriteTimeout, cfg.RedisReadTimeout)
 
-	encryptor, err := encryptor.NewEncryptor(cfg.DecryptionEndpoint, cfg.EncryptionEndpoint, cfg.EnableEncrytion, cfg.EncryptionTimeout, cfg.Audience)
+	encrypt, err := encryptor.NewEncryptor(cfg.DecryptionEndpoint, cfg.EncryptionEndpoint, cfg.EnableEncrytion, cfg.EncryptionTimeout, cfg.Audience)
 	if cfg.EnableEncrytion && err != nil {
 		log.Sugar().Fatalf("error creating encryption client: %v", err)
 	}
 	v := validator.NewValidator(costLimitCache, rateLimitCache, costStorage, requestsLimitStorage)
 
 	m := manager.NewManager(store, costLimitCache, rateLimitCache, accessCache, keysCache, secondaryKeysCache, requestsLimitStorage)
-	krm := manager.NewReportingManager(costStorage, store, store, v)
-	psm := manager.NewProviderSettingsManager(store, psCache, encryptor)
+	krm := manager.NewReportingManager(costStorage, store, store, v, statisticsCache)
+	psm := manager.NewProviderSettingsManager(store, psCache, encrypt)
 	cpm := manager.NewCustomProvidersManager(store, cpMemStore)
 	rm := manager.NewRouteManager(store, store, rMemStore, psm)
 	pm := manager.NewPolicyManager(store, rMemStore)
 	um := manager.NewUserManager(store, store)
 
-	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um, cfg.AdminPass, cfg.XCodioSignSecret)
+	as, err := admin.NewAdminServer(log, *modePtr, m, krm, psm, cpm, rm, pm, um)
 	if err != nil {
 		log.Sugar().Fatalf("error creating admin http server: %v", err)
 	}
@@ -358,7 +367,7 @@ func main() {
 
 	rec := recorder.NewRecorder(costStorage, userCostStorage, costLimitCache, userCostLimitCache, ce, store, requestsLimitStorage)
 	rlm := manager.NewRateLimitManager(rateLimitCache, userRateLimitCache)
-	a := auth.NewAuthenticator(psm, m, rm, store, encryptor)
+	a := auth.NewAuthenticator(psm, m, rm, store, encrypt)
 
 	c := cache.NewCache(apiCache)
 

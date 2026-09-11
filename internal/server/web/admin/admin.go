@@ -43,6 +43,7 @@ type KeyReportingManager interface {
 	GetTopKeyRingReporting(r *event.KeyRingReportingRequest) (*event.KeyRingReportingResponse, error)
 	GetSpentKeyReporting(r *event.SpentKeyReportingRequest) (*event.SpentKeyReportingResponse, error)
 	GetUsageReporting(r *event.UsageReportingRequest) (*event.UsageReportingResponse, error)
+	GetStatistic(r *event.StatisticsRequest) (*event.StatisticsResponse, error)
 
 	GetKeyReporting(keyId string) (*key.KeyReporting, error)
 	GetEvents(userId, customId string, keyIds []string, start int64, end int64) ([]*event.Event, error)
@@ -73,12 +74,12 @@ type AdminServer struct {
 	m      KeyManager
 }
 
-func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReportingManager, psm ProviderSettingsManager, cpm CustomProvidersManager, rm RouteManager, pm PoliciesManager, um UserManager, adminPass, xCodioSignSecret string) (*AdminServer, error) {
+func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReportingManager, psm ProviderSettingsManager, cpm CustomProvidersManager, rm RouteManager, pm PoliciesManager, um UserManager) (*AdminServer, error) {
 	router := gin.New()
 
 	prod := mode == "production"
-	router.Use(getAdminLoggerMiddleware(log, "admin", prod, adminPass))
-	router.Use(getAdminSignRequestMiddleware(prod, xCodioSignSecret))
+	router.Use(getAdminLoggerMiddleware(log, "admin", prod))
+	router.Use(getAdminSignRequestMiddleware(prod))
 
 	router.GET("/api/health", getGetHealthCheckHandler())
 
@@ -102,6 +103,8 @@ func NewAdminServer(log *zap.Logger, mode string, m KeyManager, krm KeyReporting
 	router.POST("/api/reporting/top-key-rings", getGetTopKeyRingsMetricsHandler(krm, prod))
 	router.POST("/api/reporting/spent-keys", getGetSpentKeyMetricsHandler(krm, prod))
 	router.POST("/api/reporting/usage", getGetUsageMetricsHandler(krm, prod))
+
+	router.POST("/api/reporting/statistic", getGetStatisticHandler(krm, prod))
 
 	router.GET("/api/reporting/custom-ids", getGetCustomIdsHandler(krm, prod))
 

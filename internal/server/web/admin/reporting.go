@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -548,5 +549,84 @@ func getGetUsageMetricsHandler(m KeyReportingManager, prod bool) gin.HandlerFunc
 		telemetry.Incr("bricksllm.admin.get_get_usage_metrics_handler.success", nil, 1)
 
 		c.JSON(http.StatusOK, reportingResponse)
+	}
+}
+
+func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log := util.GetLogFromCtx(c)
+		telemetry.Incr("bricksllm.admin.get_get_statistic_handler.requests", nil, 1)
+
+		start := time.Now()
+		defer func() {
+			dur := time.Since(start)
+			telemetry.Timing("bricksllm.admin.get_get_statistic_handler.latency", dur, nil, 1)
+		}()
+
+		path := "/api/reporting/statistic"
+
+		if c == nil || c.Request == nil {
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/empty-context",
+				Title:    "context is empty error",
+				Status:   http.StatusInternalServerError,
+				Detail:   "gin context is empty",
+				Instance: path,
+			})
+			return
+		}
+
+		data, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logError(log, "error when reading statistics request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/request-body-read",
+				Title:    "request body reader error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		request := &event.StatisticsRequest{}
+		err = json.Unmarshal(data, request)
+		if err != nil {
+			logError(log, "error when unmarshalling statistics request body", prod, err)
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/json-unmarshal",
+				Title:    "json unmarshaller error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		statisticResponse, err := m.GetStatistic(request)
+		if err != nil {
+			telemetry.Incr("bricksllm.admin.get_get_statistic_handler.get_statistic", nil, 1)
+
+			logError(log, "error when getting statistics", prod, err)
+
+			if _, ok := err.(*errors.NotFoundError); ok {
+				fmt.Println("NotFoundError:", err.Error())
+				c.JSON(http.StatusAccepted, &gin.H{"status": "in_progress", "message": "statistics data is being collected, please try again later"})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, &ErrorResponse{
+				Type:     "/errors/event-reporting-manager",
+				Title:    "statistics reporting error",
+				Status:   http.StatusInternalServerError,
+				Detail:   err.Error(),
+				Instance: path,
+			})
+			return
+		}
+
+		telemetry.Incr("bricksllm.admin.get_get_statistic_handler.success", nil, 1)
+
+		c.JSON(http.StatusOK, statisticResponse)
 	}
 }

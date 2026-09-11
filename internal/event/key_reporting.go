@@ -1,5 +1,11 @@
 package event
 
+import (
+	"strings"
+
+	internalErrors "github.com/bricks-cloud/bricksllm/internal/errors"
+)
+
 type KeyDataPoint struct {
 	KeyId     string  `json:"keyId"`
 	CostInUsd float64 `json:"costInUsd"`
@@ -75,4 +81,155 @@ type UsageData struct {
 
 type UsageReportingResponse struct {
 	UsageData *UsageData `json:"usageData"`
+}
+
+type StatisticsRequest struct {
+	Level string  `json:"level"` // all | org | course
+	Id    *string `json:"id"`
+}
+
+func (r *StatisticsRequest) GetCacheKey() string {
+	if r.Level == "all" {
+		return r.Level
+	}
+	if r.Id != nil {
+		return r.Level + ":" + *r.Id
+	}
+	return r.Level
+}
+
+type StatisticLevel string
+
+var StaticLevels = struct {
+	Unknown StatisticLevel
+	All     StatisticLevel
+	Org     StatisticLevel
+	Course  StatisticLevel
+}{
+	Unknown: "unknown",
+	All:     "all",
+	Org:     "org",
+	Course:  "course",
+}
+
+func StatisticLevelFromStr(s string) StatisticLevel {
+	switch s {
+	case "all":
+		return StaticLevels.All
+	case "org":
+		return StaticLevels.Org
+	case "course":
+		return StaticLevels.Course
+	default:
+		return StaticLevels.Unknown
+	}
+}
+
+func (r *StatisticsRequest) Validate() error {
+	if r.Level != "all" && r.Level != "org" && r.Level != "course" {
+		return internalErrors.NewValidationError("level must be one of 'all', 'org', or 'course'")
+	}
+	if (r.Level == "org" || r.Level == "course") && (r.Id == nil || strings.TrimSpace(*r.Id) == "") {
+		return internalErrors.NewValidationError("id must be provided when level is 'org' or 'course'")
+	}
+	return nil
+}
+
+func (r *StatisticsRequest) GetLevel() StatisticLevel {
+	return StatisticLevelFromStr(r.Level)
+}
+
+type StatisticsResponse struct {
+	StatisticsData *StatisticsData `json:"statisticsData"`
+}
+
+type StatisticsData struct {
+	AllStatisticsData    *AllStatisticsData    `json:"allStatisticsData,omitempty"`
+	OrgStatisticsData    *OrgStatisticsData    `json:"orgStatisticsData,omitempty"`
+	CourseStatisticsData *CourseStatisticsData `json:"courseStatisticsData,omitempty"`
+}
+
+type Cost struct {
+	OneMonth  float64 `json:"1month"`
+	FiveMonth float64 `json:"5month"`
+}
+
+type CostPack struct {
+	CodioProvided Cost `json:"codioProvided"`
+	CodioSpecial  Cost `json:"codioSpecial"`
+}
+
+type FinancialKpis struct {
+	MaxUserSpend            float64 `json:"maxUserSpend"`
+	MedianUserSpend         float64 `json:"medianUserSpend"`
+	AvgUserSpend            float64 `json:"avgUserSpend"`
+	P90UserSpend            float64 `json:"p90UserSpend"`
+	P95UserSpend            float64 `json:"p95UserSpend"`
+	P99UserSpend            float64 `json:"p99UserSpend"`
+	SampleCount             int     `json:"sampleCount"`
+	RecommendedSoftLimitUsd float64 `json:"recommendedSoftLimitUsd"`
+	RecommendedHardLimitUsd float64 `json:"recommendedHardLimitUsd"`
+}
+
+type DailySpendDistributionDataPoint struct {
+	MaxUserSpend    float64 `json:"maxUserSpend"`
+	MedianUserSpend float64 `json:"medianUserSpend"`
+	AvgUserSpend    float64 `json:"avgUserSpend"`
+	P95UserSpend    float64 `json:"p95UserSpend"`
+	P99UserSpend    float64 `json:"p99UserSpend"`
+	Date            string  `json:"date"`
+}
+
+type PeriodSpendDistributionDataPoint struct {
+	MaxUserSpend    float64 `json:"maxUserSpend"`
+	MedianUserSpend float64 `json:"medianUserSpend"`
+	AvgUserSpend    float64 `json:"avgUserSpend"`
+	P95UserSpend    float64 `json:"p95UserSpend"`
+	P99UserSpend    float64 `json:"p99UserSpend"`
+	DatePeriod      string  `json:"datePeriod"`
+}
+
+type AllStatisticsData struct {
+	Total CostPack                 `json:"total"`
+	Orgs  []ShortOrgStatisticsData `json:"orgs"`
+}
+
+type ShortOrgStatisticsData struct {
+	Id    string   `json:"id"`
+	Costs CostPack `json:"costs"`
+}
+
+type ShortCourseStatisticsData struct {
+	Id    string   `json:"id"`
+	Costs CostPack `json:"costs"`
+}
+
+type TopFiveUserSpend struct {
+	UserId         string  `json:"userId"`
+	SpendLastMonth float64 `json:"spendLastMonth"`
+}
+
+type OrgStatisticsData struct {
+	Id                               string                             `json:"id"`
+	Costs                            CostPack                           `json:"costs"`
+	Courses                          []ShortCourseStatisticsData        `json:"courses"`
+	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
+	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
+	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
+	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
+	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
+	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
+	TopFive                          []TopFiveUserSpend                 `json:"topFive"`
+}
+
+type CourseStatisticsData struct {
+	Id                               string                             `json:"id"`
+	Costs                            CostPack                           `json:"costs"`
+	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
+	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
+	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
+	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
+	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
+	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
+	TopFive                          []TopFiveUserSpend                 `json:"topFive"`
 }
