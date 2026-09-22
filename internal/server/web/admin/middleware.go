@@ -42,11 +42,6 @@ func getAdminSignRequestMiddleware(prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := util.GetLogFromCtx(c)
 
-		if !prod {
-			c.Next()
-			return
-		}
-
 		timestamp := c.GetHeader("X-Codio-Sign-Timestamp")
 		token := c.GetHeader("X-Codio-Sign")
 		provider := c.GetHeader("X-Codio-Provider")
@@ -59,10 +54,10 @@ func getAdminSignRequestMiddleware(prod bool) gin.HandlerFunc {
 
 		body, err := io.ReadAll(c.Request.Body)
 		if err != nil {
-			logError(log, "error when reading get events request body", prod, err)
+			logError(log, "error when reading get request body", prod, err)
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/request-body-read",
-				Title:    "get events request body reader error",
+				Title:    "get request body reader error",
 				Status:   http.StatusInternalServerError,
 				Detail:   err.Error(),
 				Instance: c.FullPath(),
