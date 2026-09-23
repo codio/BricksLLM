@@ -31,7 +31,7 @@ dailyDistributionDataPoint:
   "avgUserSpend": float,
   "p95UserSpend": float,
   "p99UserSpend": float,
-  "date": "YYYY-MM-DD"
+  "date": "MM-DD"
 }
 
 periodDistributionDataPoint:
@@ -127,9 +127,9 @@ What each distribution point means:
 - `topFive` is a companion list for the current scope and contains the top 5 users by spend for the last month
 
 Date labels:
-- daily uses `YYYY-MM-DD`
-- weekly uses `YYYY-MM-DD/YYYY-MM-DD` where the label represents week start and week end
-- monthly uses `YYYY-MM`
+- daily uses `MM-DD`
+- weekly uses `MM-DD/MM-DD` where the label represents week start and week end
+- monthly uses `MM`
 
 Examples:
 - `dailySpecialDistribution[i]` shows one calendar day from the last month

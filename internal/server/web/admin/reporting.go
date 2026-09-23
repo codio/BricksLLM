@@ -610,7 +610,6 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 			logError(log, "error when getting statistics", prod, err)
 
 			if _, ok := err.(*errors.NotFoundError); ok {
-				fmt.Println("NotFoundError:", err.Error())
 				c.JSON(http.StatusAccepted, &gin.H{"status": "in_progress", "message": "statistics data is being collected, please try again later"})
 				return
 			}

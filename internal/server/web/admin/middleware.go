@@ -40,6 +40,11 @@ func getAdminLoggerMiddleware(log *zap.Logger, prefix string, prod bool) gin.Han
 
 func getAdminSignRequestMiddleware(prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if c.FullPath() == "/api/health" {
+			c.Next()
+			return
+		}
+
 		log := util.GetLogFromCtx(c)
 
 		timestamp := c.GetHeader("X-Codio-Sign-Timestamp")

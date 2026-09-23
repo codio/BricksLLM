@@ -7,6 +7,8 @@ import (
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type costStorage interface {
@@ -45,20 +47,22 @@ type eventStorage interface {
 }
 
 type ReportingManager struct {
-	es eventStorage
-	cs costStorage
-	ks keyStorage
-	kv keyValidator
-	sc StatisticsCache
+	es  eventStorage
+	cs  costStorage
+	ks  keyStorage
+	kv  keyValidator
+	sc  StatisticsCache
+	log *zap.Logger
 }
 
-func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, kv keyValidator, sc StatisticsCache) *ReportingManager {
+func NewReportingManager(log *zap.Logger, cs costStorage, ks keyStorage, es eventStorage, kv keyValidator, sc StatisticsCache) *ReportingManager {
 	return &ReportingManager{
-		cs: cs,
-		ks: ks,
-		es: es,
-		kv: kv,
-		sc: sc,
+		cs:  cs,
+		ks:  ks,
+		es:  es,
+		kv:  kv,
+		sc:  sc,
+		log: log,
 	}
 }
 
@@ -244,6 +248,7 @@ func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, lev
 	statisticsData, err := rm.es.GetStatisticsData(level, id)
 
 	if err != nil {
+		rm.log.Sugar().Errorf("error collecting statistics data for cache key %s: %v", cacheKey, err)
 		return
 	}
 	_ = rm.sc.Set(cacheKey, statisticsData, time.Hour*24)

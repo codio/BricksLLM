@@ -19,7 +19,6 @@
     "stats_address":"127.0.0.1:8125",
     "prometheus_enabled":false,
     "prometheus_port":"2112",
-    "admin_pass": "",
     "proxy_timeout": "600s",
     "number_of_event_message_consumers": 3,
     "openai_api_key": "",
@@ -27,6 +26,5 @@
     "amazon_region": "us-west-2",
     "amazon_request_timeout": "5s",
     "amazon_connection_timeout": "10s",
-    "remove_user_agent": false,
-    "x_codio_sign_secret": ""
+    "remove_user_agent": false
 }
