@@ -7,7 +7,6 @@ import (
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
-	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
