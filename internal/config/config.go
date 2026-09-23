@@ -37,7 +37,6 @@ type Config struct {
 	StatsAddress                  string        `koanf:"stats_address" env:"STATS_ADDRESS" envDefault:"127.0.0.1:8125"`
 	PrometheusEnabled             bool          `koanf:"prometheus_enabled" env:"PROMETHEUS_ENABLED" envDefault:"true"`
 	PrometheusPort                string        `koanf:"prometheus_port" env:"PROMETHEUS_PORT" envDefault:"2112"`
-	AdminPass                     string        `koanf:"admin_pass" env:"ADMIN_PASS"`
 	ProxyTimeout                  time.Duration `koanf:"proxy_timeout" env:"PROXY_TIMEOUT" envDefault:"600s"`
 	NumberOfEventMessageConsumers int           `koanf:"number_of_event_message_consumers" env:"NUMBER_OF_EVENT_MESSAGE_CONSUMERS" envDefault:"3"`
 	OpenAiApiKey                  string        `koanf:"openai_api_key" env:"OPENAI_API_KEY"`
@@ -51,7 +50,6 @@ type Config struct {
 	DecryptionEndpoint            string        `koanf:"decryption_endpoint" env:"DECRYPTION_ENDPOINT"`
 	EncryptionTimeout             time.Duration `koanf:"encryption_timeout" env:"ENCRYPTION_TIMEOUT" envDefault:"5s"`
 	Audience                      string        `koanf:"audience" env:"AUDIENCE"`
-	XCodioSignSecret              string        `koanf:"x_codio_sign_secret" env:"X_CODIO_SIGN_SECRET"`
 }
 
 func prepareDotEnv(envFilePath string) error {

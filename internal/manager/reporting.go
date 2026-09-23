@@ -2,10 +2,12 @@ package manager
 
 import (
 	"strings"
+	"time"
 
 	internal_errors "github.com/bricks-cloud/bricksllm/internal/errors"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
+	"go.uber.org/zap"
 )
 
 type costStorage interface {
@@ -21,6 +23,13 @@ type keyValidator interface {
 	Validate(k *key.ResponseKey, promptCost float64) error
 }
 
+type StatisticsCache interface {
+	Get(key string) (*event.StatisticsData, error)
+	Set(key string, val *event.StatisticsData, ttl time.Duration) error
+	TryMarkInProgress(key string) (bool, error)
+	DeleteInProgress(key string) error
+}
+
 type eventStorage interface {
 	GetEvents(userId, customId string, keyIds []string, start, end int64) ([]*event.Event, error)
 	GetEventsV2(req *event.EventRequest) (*event.EventResponse, error)
@@ -33,21 +42,26 @@ type eventStorage interface {
 
 	GetTopKeyRingDataPoints(start, end int64, tags []string, order string, limit, offset int, revoked *bool, topBy string) ([]*event.KeyRingDataPoint, error)
 	GetUsageData(tags []string) (*event.UsageData, error)
+	GetStatisticsData(level event.StatisticLevel, id *string) (*event.StatisticsData, error)
 }
 
 type ReportingManager struct {
-	es eventStorage
-	cs costStorage
-	ks keyStorage
-	kv keyValidator
+	es  eventStorage
+	cs  costStorage
+	ks  keyStorage
+	kv  keyValidator
+	sc  StatisticsCache
+	log *zap.Logger
 }
 
-func NewReportingManager(cs costStorage, ks keyStorage, es eventStorage, kv keyValidator) *ReportingManager {
+func NewReportingManager(log *zap.Logger, cs costStorage, ks keyStorage, es eventStorage, kv keyValidator, sc StatisticsCache) *ReportingManager {
 	return &ReportingManager{
-		cs: cs,
-		ks: ks,
-		es: es,
-		kv: kv,
+		cs:  cs,
+		ks:  ks,
+		es:  es,
+		kv:  kv,
+		sc:  sc,
+		log: log,
 	}
 }
 
@@ -185,6 +199,58 @@ func (rm *ReportingManager) GetUsageReporting(r *event.UsageReportingRequest) (*
 	return &event.UsageReportingResponse{
 		UsageData: usage,
 	}, nil
+}
+
+func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.StatisticsResponse, error) {
+	if r == nil {
+		return nil, internal_errors.NewValidationError("statistics request cannot be nil")
+	}
+
+	if err := r.Validate(); err != nil {
+		return nil, err
+	}
+
+	cacheKey := r.GetCacheKey()
+	if data, err := rm.sc.Get(cacheKey); err == nil {
+		return &event.StatisticsResponse{
+			StatisticsData: data,
+		}, nil
+	}
+
+	go rm.backgroundCollectStatisticsData(cacheKey, r.GetLevel(), r.Id)
+
+	timeout := time.After(10 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-timeout:
+			return nil, internal_errors.NewNotFoundError("statistics data is not ready yet, please try again later")
+		case <-ticker.C:
+			if data, err := rm.sc.Get(cacheKey); err == nil {
+				return &event.StatisticsResponse{
+					StatisticsData: data,
+				}, nil
+			}
+		}
+	}
+}
+
+func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, level event.StatisticLevel, id *string) {
+	claimed, err := rm.sc.TryMarkInProgress(cacheKey)
+	if err != nil || !claimed {
+		return
+	}
+	defer rm.sc.DeleteInProgress(cacheKey)
+
+	statisticsData, err := rm.es.GetStatisticsData(level, id)
+
+	if err != nil {
+		rm.log.Sugar().Errorf("error collecting statistics data for cache key %s: %v", cacheKey, err)
+		return
+	}
+	_ = rm.sc.Set(cacheKey, statisticsData, time.Hour*24)
 }
 
 func (rm *ReportingManager) GetCustomIds(keyId string) ([]string, error) {

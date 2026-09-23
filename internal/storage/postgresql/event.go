@@ -651,6 +651,539 @@ func (s *Store) GetUsageData(tags []string) (*event.UsageData, error) {
 	return data, nil
 }
 
+func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*event.StatisticsData, error) {
+	result := &event.StatisticsData{}
+
+	switch level {
+	case event.StaticLevels.All:
+		total, err := s.getTotalCostPack(nil)
+		if err != nil {
+			return nil, err
+		}
+
+		orgPacks, err := s.GetOrgsCostPack()
+		if err != nil {
+			return nil, err
+		}
+
+		orgs := make([]event.ShortOrgStatisticsData, 0, len(orgPacks))
+		for orgID, costs := range orgPacks {
+			orgs = append(orgs, event.ShortOrgStatisticsData{Id: orgID, Costs: costs})
+		}
+		slices.SortFunc(orgs, func(a, b event.ShortOrgStatisticsData) int {
+			return strings.Compare(a.Id, b.Id)
+		})
+
+		result.AllStatisticsData = &event.AllStatisticsData{
+			Total: *total,
+			Orgs:  orgs,
+		}
+	case event.StaticLevels.Org:
+		if id == nil || len(*id) == 0 {
+			return nil, internal_errors.NewValidationError("id must be provided when level is 'org'")
+		}
+
+		costs, err := s.getTotalCostPack([]string{orgTagPrefix + *id})
+		if err != nil {
+			return nil, err
+		}
+
+		coursePacks, err := s.GetCoursesCostPack(*id)
+		if err != nil {
+			return nil, err
+		}
+
+		courses := make([]event.ShortCourseStatisticsData, 0, len(coursePacks))
+		for courseID, courseCosts := range coursePacks {
+			courses = append(courses, event.ShortCourseStatisticsData{Id: courseID, Costs: courseCosts})
+		}
+		slices.SortFunc(courses, func(a, b event.ShortCourseStatisticsData) int {
+			return strings.Compare(a.Id, b.Id)
+		})
+
+		dailySpecial, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioSpecialTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		dailyProvided, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioProvidedTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklyProvided, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioProvidedTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlyProvided, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioProvidedTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		topFive, err := s.getTopFiveUserSpends([]string{orgTagPrefix + *id})
+		if err != nil {
+			return nil, err
+		}
+
+		result.OrgStatisticsData = &event.OrgStatisticsData{
+			Id:                               *id,
+			Costs:                            *costs,
+			Courses:                          courses,
+			DailySpecialDistribution:         dailySpecial,
+			WeeklySpecialDistribution:        weeklySpecial,
+			MonthlySpecialDistribution:       monthlySpecial,
+			DailyCodioProvidedDistribution:   dailyProvided,
+			WeeklyCodioProvidedDistribution:  weeklyProvided,
+			MonthlyCodioProvidedDistribution: monthlyProvided,
+			TopFive:                          topFive,
+		}
+	case event.StaticLevels.Course:
+		if id == nil || len(*id) == 0 {
+			return nil, internal_errors.NewValidationError("id must be provided when level is 'course'")
+		}
+
+		costs, err := s.GetCourseCostPack(*id)
+		if err != nil {
+			return nil, err
+		}
+
+		dailySpecial, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioSpecialTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		dailyProvided, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioProvidedTag)
+		if err != nil {
+			return nil, err
+		}
+		weeklyProvided, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioProvidedTag, "week")
+		if err != nil {
+			return nil, err
+		}
+		monthlyProvided, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioProvidedTag, "month")
+		if err != nil {
+			return nil, err
+		}
+		topFive, err := s.getTopFiveUserSpends([]string{courseTagPrefix + *id})
+		if err != nil {
+			return nil, err
+		}
+
+		result.CourseStatisticsData = &event.CourseStatisticsData{
+			Id:                               *id,
+			Costs:                            *costs,
+			DailySpecialDistribution:         dailySpecial,
+			WeeklySpecialDistribution:        weeklySpecial,
+			MonthlySpecialDistribution:       monthlySpecial,
+			DailyCodioProvidedDistribution:   dailyProvided,
+			WeeklyCodioProvidedDistribution:  weeklyProvided,
+			MonthlyCodioProvidedDistribution: monthlyProvided,
+			TopFive:                          topFive,
+		}
+	default:
+		return nil, internal_errors.NewValidationError("invalid level")
+	}
+
+	return result, nil
+}
+
+const (
+	orgTagPrefix          = "org-tag-"
+	userTagPrefix         = "user-tag-"
+	courseTagPrefix       = "course-tag-"
+	codioSpecialTag       = "codio-special"
+	codioProvidedTag      = "codio-provided"
+	statisticsLookbackAge = -5 * 30 * 24 * time.Hour
+)
+
+func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[string]event.CostPack, error) {
+	now := time.Now()
+	oneMonthAgo := now.Add(-30 * 24 * time.Hour).Unix()
+	fiveMonthsAgo := now.Add(-5 * 30 * 24 * time.Hour).Unix()
+
+	args := []any{groupBy, oneMonthAgo, fiveMonthsAgo}
+	conditions := []string{"e.created_at >= $3"}
+	index := 4
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			regexp_replace(tag.tag, '^' || $1, '') AS grouped_id,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+		FROM events e,
+		LATERAL unnest(e.tags) AS tag(tag)
+		WHERE tag.tag LIKE $1 || '%%'
+			AND %s
+		GROUP BY regexp_replace(tag.tag, '^' || $1, '')
+	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make(map[string]event.CostPack)
+	for rows.Next() {
+		var id string
+		var pack event.CostPack
+
+		if err2 := rows.Scan(
+			&id,
+			&pack.CodioProvided.OneMonth,
+			&pack.CodioProvided.FiveMonth,
+			&pack.CodioSpecial.OneMonth,
+			&pack.CodioSpecial.FiveMonth,
+		); err2 != nil {
+			return nil, err2
+		}
+
+		result[id] = pack
+	}
+	if err2 := rows.Err(); err2 != nil {
+		return nil, err2
+	}
+
+	return result, nil
+}
+
+func (s *Store) getTotalCostPack(filterTags []string) (*event.CostPack, error) {
+	now := time.Now()
+	oneMonthAgo := now.Add(-30 * 24 * time.Hour).Unix()
+	fiveMonthsAgo := now.Add(-5 * 30 * 24 * time.Hour).Unix()
+
+	args := []any{oneMonthAgo, fiveMonthsAgo}
+	conditions := []string{"created_at >= $2"}
+	index := 3
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+		FROM events
+		WHERE %s
+	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	pack := &event.CostPack{}
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
+		&pack.CodioProvided.OneMonth,
+		&pack.CodioProvided.FiveMonth,
+		&pack.CodioSpecial.OneMonth,
+		&pack.CodioSpecial.FiveMonth,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return pack, nil
+		}
+		return nil, err
+	}
+
+	return pack, nil
+}
+
+func (s *Store) GetOrgsCostPack() (map[string]event.CostPack, error) {
+	return s.getGroupedCostPack(orgTagPrefix, nil)
+}
+
+func (s *Store) GetCoursesCostPack(orgId string) (map[string]event.CostPack, error) {
+	return s.getGroupedCostPack(courseTagPrefix, []string{orgTagPrefix + orgId})
+}
+
+func (s *Store) GetCourseCostPack(courseId string) (*event.CostPack, error) {
+	return s.getTotalCostPack([]string{courseTagPrefix + courseId})
+}
+
+func (s *Store) getDailyDistribution(filterTags []string, costTypeTag string) ([]event.DailySpendDistributionDataPoint, error) {
+	start := beginningOfDay(time.Now().UTC()).AddDate(0, 0, -29)
+	end := beginningOfDay(time.Now().UTC()).AddDate(0, 0, 1)
+
+	rows, err := s.getPeriodKpisRows(filterTags, costTypeTag, "day", start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	rowMap := make(map[string]financialKpiRow, len(rows))
+	for _, row := range rows {
+		rowMap[row.periodStart.Format("Jan-02")] = row
+	}
+
+	result := make([]event.DailySpendDistributionDataPoint, 0, 30)
+	for current := start; current.Before(end); current = current.AddDate(0, 0, 1) {
+		key := current.Format("Jan-02")
+		row, ok := rowMap[key]
+		if !ok {
+			result = append(result, event.DailySpendDistributionDataPoint{Date: key})
+			continue
+		}
+		result = append(result, event.DailySpendDistributionDataPoint{
+			MaxUserSpend:    row.max,
+			MedianUserSpend: row.median,
+			AvgUserSpend:    row.avg,
+			P95UserSpend:    row.p95,
+			P99UserSpend:    row.p99,
+			Date:            key,
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Store) getPeriodDistribution(filterTags []string, costTypeTag, period string) ([]event.PeriodSpendDistributionDataPoint, error) {
+	var start time.Time
+	var end time.Time
+
+	now := time.Now().UTC()
+	switch period {
+	case "week":
+		start = beginningOfWeek(now).AddDate(0, 0, -7*20)
+		end = beginningOfWeek(now).AddDate(0, 0, 7)
+	case "month":
+		start = beginningOfMonth(now).AddDate(0, -4, 0)
+		end = beginningOfMonth(now).AddDate(0, 1, 0)
+	default:
+		return nil, internal_errors.NewValidationError("unsupported period")
+	}
+
+	lookbackStart := time.Now().UTC().Add(statisticsLookbackAge)
+	if start.Before(lookbackStart) {
+		start = truncateToPeriodStart(lookbackStart, period)
+	}
+
+	rows, err := s.getPeriodKpisRows(filterTags, costTypeTag, period, start, end)
+	if err != nil {
+		return nil, err
+	}
+
+	rowMap := make(map[string]financialKpiRow, len(rows))
+	for _, row := range rows {
+		rowMap[formatPeriodLabel(row.periodStart, period)] = row
+	}
+
+	result := []event.PeriodSpendDistributionDataPoint{}
+	for current := start; current.Before(end); current = addPeriod(current, period) {
+		label := formatPeriodLabel(current, period)
+		row, ok := rowMap[label]
+		if !ok {
+			result = append(result, event.PeriodSpendDistributionDataPoint{DatePeriod: label})
+			continue
+		}
+		result = append(result, event.PeriodSpendDistributionDataPoint{
+			MaxUserSpend:    row.max,
+			MedianUserSpend: row.median,
+			AvgUserSpend:    row.avg,
+			P95UserSpend:    row.p95,
+			P99UserSpend:    row.p99,
+			DatePeriod:      label,
+		})
+	}
+
+	return result, nil
+}
+
+type financialKpiRow struct {
+	periodStart time.Time
+	max         float64
+	median      float64
+	avg         float64
+	p95         float64
+	p99         float64
+}
+
+func (s *Store) getPeriodKpisRows(filterTags []string, costTypeTag, period string, start, end time.Time) ([]financialKpiRow, error) {
+	args := []any{userTagPrefix, pq.Array([]string{costTypeTag}), start.Unix(), end.Unix()}
+	conditions := []string{"tag.tag LIKE $1 || '%'", "e.tags @> $2", "e.created_at >= $3", "e.created_at < $4"}
+	index := 5
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	periodExpr := fmt.Sprintf("date_trunc('%s', timezone('UTC', to_timestamp(e.created_at)))", period)
+	query := fmt.Sprintf(`
+		WITH per_user_period AS (
+			SELECT
+				%s AS period_start,
+				regexp_replace(tag.tag, '^' || $1, '') AS user_id,
+				COALESCE(SUM(e.cost_in_usd), 0) AS user_period_cost
+			FROM events e,
+			LATERAL unnest(e.tags) AS tag(tag)
+			WHERE %s
+			GROUP BY %s, regexp_replace(tag.tag, '^' || $1, '')
+		)
+		SELECT
+			period_start,
+			COALESCE(MAX(user_period_cost), 0) AS max_user_spend,
+			COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY user_period_cost), 0) AS median_user_spend,
+			COALESCE(AVG(user_period_cost), 0) AS avg_user_spend,
+			COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY user_period_cost), 0) AS p95_user_spend,
+			COALESCE(percentile_cont(0.99) WITHIN GROUP (ORDER BY user_period_cost), 0) AS p99_user_spend
+		FROM per_user_period
+		GROUP BY period_start
+		ORDER BY period_start
+	`, periodExpr, strings.Join(conditions, " AND "), periodExpr)
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	queryRows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer queryRows.Close()
+
+	result := []financialKpiRow{}
+	for queryRows.Next() {
+		var row financialKpiRow
+		if err := queryRows.Scan(&row.periodStart, &row.max, &row.median, &row.avg, &row.p95, &row.p99); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	if err := queryRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *Store) getTopFiveUserSpends(filterTags []string) ([]event.TopFiveUserSpend, error) {
+	end := time.Now().UTC()
+	start := end.Add(-30 * 24 * time.Hour)
+
+	args := []any{userTagPrefix, start.Unix(), end.Unix()}
+	conditions := []string{"tag.tag LIKE $1 || '%'", "e.created_at >= $2", "e.created_at < $3"}
+	index := 4
+
+	for _, tag := range filterTags {
+		conditions = append(conditions, fmt.Sprintf("e.tags @> $%d", index))
+		args = append(args, pq.Array([]string{tag}))
+		index++
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			regexp_replace(tag.tag, '^' || $1, '') AS user_id,
+			COALESCE(SUM(e.cost_in_usd), 0) AS spend_last_month
+		FROM events e,
+		LATERAL unnest(e.tags) AS tag(tag)
+		WHERE %s
+		GROUP BY regexp_replace(tag.tag, '^' || $1, '')
+		ORDER BY spend_last_month DESC, user_id ASC
+		LIMIT 5
+	`, strings.Join(conditions, " AND "))
+
+	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
+	defer cancel()
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []event.TopFiveUserSpend{}
+	for rows.Next() {
+		var row event.TopFiveUserSpend
+		if err := rows.Scan(&row.UserId, &row.SpendLastMonth); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func beginningOfDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func beginningOfWeek(t time.Time) time.Time {
+	dayStart := beginningOfDay(t)
+	weekday := int(dayStart.Weekday())
+	if weekday == 0 {
+		weekday = 7
+	}
+	return dayStart.AddDate(0, 0, -(weekday - 1))
+}
+
+func beginningOfMonth(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+}
+
+func truncateToPeriodStart(t time.Time, period string) time.Time {
+	switch period {
+	case "day":
+		return beginningOfDay(t)
+	case "week":
+		return beginningOfWeek(t)
+	case "month":
+		return beginningOfMonth(t)
+	default:
+		return beginningOfDay(t)
+	}
+}
+
+func addPeriod(t time.Time, period string) time.Time {
+	switch period {
+	case "week":
+		return t.AddDate(0, 0, 7)
+	case "month":
+		return t.AddDate(0, 1, 0)
+	default:
+		return t.AddDate(0, 0, 1)
+	}
+}
+
+func formatPeriodLabel(start time.Time, period string) string {
+	switch period {
+	case "week":
+		end := start.AddDate(0, 0, 6)
+		return fmt.Sprintf("%s/%s", start.Format("Jan-02"), end.Format("Jan-02"))
+	case "month":
+		return start.Format("Jan")
+	default:
+		return start.Format("Jan-02")
+	}
+}
+
 func (s *Store) GetAggregatedEventByDayDataPoints(start, end int64, keyIds []string) ([]*event.DataPointV2, error) {
 	conditionBlock := fmt.Sprintf("WHERE time_stamp >= %d AND time_stamp < %d ", start, end)
 	if len(keyIds) != 0 {

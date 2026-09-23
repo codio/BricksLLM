@@ -3,3 +3,5 @@ target
 .DS_STORE
 .vscode/launch.json
 .env
+# binary and tink
+bin/
