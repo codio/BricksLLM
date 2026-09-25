@@ -11,6 +11,7 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
 	"io"
+	"mime"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -30,7 +31,11 @@ type xCustomCapturingBody struct {
 	io.ReadCloser
 	buf      bytes.Buffer
 	exceeded bool
-	onClose  func(data []byte, exceeded bool)
+	// failed is set when the upstream body read ends in an error other than
+	// io.EOF (aborted/truncated response), so we don't capture partial data
+	// as if it were the complete response.
+	failed  bool
+	onClose func(data []byte, exceeded bool)
 }
 
 func (b *xCustomCapturingBody) Read(p []byte) (int, error) {
@@ -38,10 +43,17 @@ func (b *xCustomCapturingBody) Read(p []byte) (int, error) {
 	if n > 0 && !b.exceeded {
 		if b.buf.Len()+n > xCustomMaxCapturedResponseBytes {
 			b.exceeded = true
-			b.buf.Reset()
+			// drop the reference so the already-buffered bytes can be
+			// garbage collected instead of being held for the rest of
+			// a possibly long-lived stream.
+			b.buf = bytes.Buffer{}
 		} else {
 			b.buf.Write(p[:n])
 		}
+	}
+
+	if err != nil && err != io.EOF {
+		b.failed = true
 	}
 
 	return n, err
@@ -50,7 +62,7 @@ func (b *xCustomCapturingBody) Read(p []byte) (int, error) {
 func (b *xCustomCapturingBody) Close() error {
 	err := b.ReadCloser.Close()
 
-	if b.onClose != nil {
+	if b.onClose != nil && !b.failed {
 		b.onClose(b.buf.Bytes(), b.exceeded)
 	}
 
@@ -109,13 +121,23 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 				r.SetURL(target)
 				r.Out.URL.Path, r.Out.URL.RawPath = target.Path, target.RawPath
 				r.Out.WithContext(ctx)
+
+				// Let the transport negotiate and transparently decompress
+				// the upstream response itself; otherwise a forwarded
+				// client Accept-Encoding disables that and ModifyResponse
+				// would capture raw compressed bytes instead of text.
+				r.Out.Header.Del("Accept-Encoding")
 			},
 			ModifyResponse: func(res *http.Response) error {
-				if res.Body == nil {
+				if res.Body == nil || res.StatusCode == http.StatusSwitchingProtocols {
+					// A 101 response's Body is an io.ReadWriteCloser used
+					// for bidirectional upgrade proxying (e.g. WebSocket);
+					// wrapping it would strip that and break the upgrade.
 					return nil
 				}
 
-				isStreaming := strings.Contains(res.Header.Get("Content-Type"), "text/event-stream")
+				mediaType, _, _ := mime.ParseMediaType(res.Header.Get("Content-Type"))
+				isStreaming := mediaType == "text/event-stream"
 
 				res.Body = &xCustomCapturingBody{
 					ReadCloser: res.Body,
