@@ -149,6 +149,7 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 						if isStreaming {
 							c.Set("content", string(data))
 							c.Set("streaming_response", data)
+							c.Set("stream", true)
 							return
 						}
 
