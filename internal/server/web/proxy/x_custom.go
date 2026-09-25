@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,11 +10,52 @@ import (
 	"github.com/bricks-cloud/bricksllm/internal/telemetry"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	"github.com/gin-gonic/gin"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
 )
+
+// xCustomMaxCapturedResponseBytes caps how much of a response body gets
+// buffered for later processing (c.Set). Responses larger than this are
+// still proxied in full, they're just not captured.
+const xCustomMaxCapturedResponseBytes = 5 * 1024 * 1024 // 5MB
+
+// xCustomCapturingBody wraps a response body so its bytes keep flowing to
+// the client exactly as they arrive (no buffering delay, streaming stays
+// real-time), while also being copied into an in-memory buffer for later
+// use. onClose runs once the upstream body has been fully read/closed.
+type xCustomCapturingBody struct {
+	io.ReadCloser
+	buf      bytes.Buffer
+	exceeded bool
+	onClose  func(data []byte, exceeded bool)
+}
+
+func (b *xCustomCapturingBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 && !b.exceeded {
+		if b.buf.Len()+n > xCustomMaxCapturedResponseBytes {
+			b.exceeded = true
+			b.buf.Reset()
+		} else {
+			b.buf.Write(p[:n])
+		}
+	}
+
+	return n, err
+}
+
+func (b *xCustomCapturingBody) Close() error {
+	err := b.ReadCloser.Close()
+
+	if b.onClose != nil {
+		b.onClose(b.buf.Bytes(), b.exceeded)
+	}
+
+	return err
+}
 
 func getXCustomHandler(prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -67,6 +109,32 @@ func getXCustomHandler(prod bool) gin.HandlerFunc {
 				r.SetURL(target)
 				r.Out.URL.Path, r.Out.URL.RawPath = target.Path, target.RawPath
 				r.Out.WithContext(ctx)
+			},
+			ModifyResponse: func(res *http.Response) error {
+				if res.Body == nil {
+					return nil
+				}
+
+				isStreaming := strings.Contains(res.Header.Get("Content-Type"), "text/event-stream")
+
+				res.Body = &xCustomCapturingBody{
+					ReadCloser: res.Body,
+					onClose: func(data []byte, exceeded bool) {
+						if exceeded || len(data) == 0 {
+							return
+						}
+
+						if isStreaming {
+							c.Set("content", string(data))
+							c.Set("streaming_response", data)
+							return
+						}
+
+						c.Set("response", data)
+					},
+				}
+
+				return nil
 			},
 		}
 		proxy.ServeHTTP(c.Writer, c.Request)
