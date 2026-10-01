@@ -250,7 +250,7 @@ func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, lev
 		rm.log.Sugar().Errorf("error collecting statistics data for cache key %s: %v", cacheKey, err)
 		return
 	}
-	_ = rm.sc.Set(cacheKey, statisticsData, time.Hour*24)
+	_ = rm.sc.Set(cacheKey, statisticsData, time.Minute*30)
 }
 
 func (rm *ReportingManager) GetCustomIds(keyId string) ([]string, error) {
