@@ -668,6 +668,9 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 
 		orgs := make([]event.ShortOrgStatisticsData, 0, len(orgPacks))
 		for orgID, costs := range orgPacks {
+			if isNegligibleCostPack(costs) {
+				continue
+			}
 			orgs = append(orgs, event.ShortOrgStatisticsData{Id: orgID, Costs: costs})
 		}
 		slices.SortFunc(orgs, func(a, b event.ShortOrgStatisticsData) int {
@@ -695,6 +698,9 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 
 		courses := make([]event.ShortCourseStatisticsData, 0, len(coursePacks))
 		for courseID, courseCosts := range coursePacks {
+			if isNegligibleCostPack(courseCosts) {
+				continue
+			}
 			courses = append(courses, event.ShortCourseStatisticsData{Id: courseID, Costs: courseCosts})
 		}
 		slices.SortFunc(courses, func(a, b event.ShortCourseStatisticsData) int {
@@ -797,6 +803,15 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 	}
 
 	return result, nil
+}
+
+const negligibleCostThreshold = 0.01
+
+func isNegligibleCostPack(costs event.CostPack) bool {
+	return costs.CodioProvided.OneMonth <= negligibleCostThreshold &&
+		costs.CodioProvided.FiveMonth <= negligibleCostThreshold &&
+		costs.CodioSpecial.OneMonth <= negligibleCostThreshold &&
+		costs.CodioSpecial.FiveMonth <= negligibleCostThreshold
 }
 
 const (
