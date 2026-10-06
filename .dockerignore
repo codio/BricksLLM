@@ -7,6 +7,9 @@ Dockerfile
 *.log
 *~
 
+# binary and tink
+bin/
+
 # idea
 .idea
 .idea_modules

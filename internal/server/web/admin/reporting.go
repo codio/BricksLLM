@@ -614,6 +614,17 @@ func getGetStatisticHandler(m KeyReportingManager, prod bool) gin.HandlerFunc {
 				return
 			}
 
+			if _, ok := err.(*errors.ValidationError); ok {
+				c.JSON(http.StatusBadRequest, &ErrorResponse{
+					Type:     "/errors/invalid-reporting-request",
+					Title:    "invalid reporting request",
+					Status:   http.StatusBadRequest,
+					Detail:   err.Error(),
+					Instance: path,
+				})
+				return
+			}
+
 			c.JSON(http.StatusInternalServerError, &ErrorResponse{
 				Type:     "/errors/event-reporting-manager",
 				Title:    "statistics reporting error",

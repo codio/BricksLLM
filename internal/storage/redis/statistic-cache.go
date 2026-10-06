@@ -11,6 +11,7 @@ import (
 )
 
 const inProgressKeyPrefix = "statistic_in_progress_"
+const failedKeyPrefix = "statistic_failed_"
 
 type StatisticCache struct {
 	client *redis.Client
@@ -95,4 +96,27 @@ func (c *StatisticCache) DeleteInProgress(key string) error {
 		return err
 	}
 	return nil
+}
+
+func (c *StatisticCache) MarkFailed(key string, ttl time.Duration) error {
+	k := failedKeyPrefix + key
+	ctx, cancel := context.WithTimeout(context.Background(), c.wt)
+	defer cancel()
+	return c.client.Set(ctx, k, true, ttl).Err()
+}
+
+func (c *StatisticCache) IsFailed(key string) (bool, error) {
+	k := failedKeyPrefix + key
+	ctx, cancel := context.WithTimeout(context.Background(), c.rt)
+	defer cancel()
+
+	err := c.client.Get(ctx, k).Err()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }

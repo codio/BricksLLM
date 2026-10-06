@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/bricks-cloud/bricksllm/internal/util"
@@ -12,6 +13,25 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
+
+// signTimestampWindow is the maximum allowed skew between a signed request's
+// X-Codio-Sign-Timestamp and the current time, in either direction.
+const signTimestampWindow = 5 * time.Minute
+
+// parseSignTimestamp parses X-Codio-Sign-Timestamp, which some callers
+// (zeus) send as unix seconds and others (server, zed) send as unix
+// milliseconds.
+func parseSignTimestamp(raw string) (time.Time, bool) {
+	ts, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	if ts > 1e12 {
+		return time.UnixMilli(ts), true
+	}
+	return time.Unix(ts, 0), true
+}
 
 func getAdminLoggerMiddleware(log *zap.Logger, prefix string, prod bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -52,6 +72,13 @@ func getAdminSignRequestMiddleware(prod bool) gin.HandlerFunc {
 		provider := c.GetHeader("X-Codio-Provider")
 
 		if len(token) == 0 || len(timestamp) == 0 || len(provider) == 0 {
+			c.Status(403)
+			c.Abort()
+			return
+		}
+
+		signedAt, ok := parseSignTimestamp(timestamp)
+		if !ok || time.Since(signedAt).Abs() > signTimestampWindow {
 			c.Status(403)
 			c.Abort()
 			return

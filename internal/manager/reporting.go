@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,7 +29,13 @@ type StatisticsCache interface {
 	Set(key string, val *event.StatisticsData, ttl time.Duration) error
 	TryMarkInProgress(key string) (bool, error)
 	DeleteInProgress(key string) error
+	MarkFailed(key string, ttl time.Duration) error
+	IsFailed(key string) (bool, error)
 }
+
+// statisticsFailureTTL is how long a failed collection is remembered before
+// the next request is allowed to retry the underlying query.
+const statisticsFailureTTL = 30 * time.Second
 
 type eventStorage interface {
 	GetEvents(userId, customId string, keyIds []string, start, end int64) ([]*event.Event, error)
@@ -217,6 +224,10 @@ func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.Sta
 		}, nil
 	}
 
+	if failed, err := rm.sc.IsFailed(cacheKey); err == nil && failed {
+		return nil, fmt.Errorf("statistics data collection failed for cache key %s, please try again shortly", cacheKey)
+	}
+
 	go rm.backgroundCollectStatisticsData(cacheKey, r.GetLevel(), r.Id)
 
 	timeout := time.After(10 * time.Second)
@@ -233,6 +244,10 @@ func (rm *ReportingManager) GetStatistic(r *event.StatisticsRequest) (*event.Sta
 					StatisticsData: data,
 				}, nil
 			}
+
+			if failed, err := rm.sc.IsFailed(cacheKey); err == nil && failed {
+				return nil, fmt.Errorf("statistics data collection failed for cache key %s, please try again shortly", cacheKey)
+			}
 		}
 	}
 }
@@ -248,6 +263,9 @@ func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, lev
 
 	if err != nil {
 		rm.log.Sugar().Errorf("error collecting statistics data for cache key %s: %v", cacheKey, err)
+		if markErr := rm.sc.MarkFailed(cacheKey, statisticsFailureTTL); markErr != nil {
+			rm.log.Sugar().Errorf("error marking statistics collection failure for cache key %s: %v", cacheKey, markErr)
+		}
 		return
 	}
 	_ = rm.sc.Set(cacheKey, statisticsData, time.Minute*30)
