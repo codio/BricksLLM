@@ -707,18 +707,6 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return strings.Compare(a.Id, b.Id)
 		})
 
-		dailySpecial, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioSpecialTag)
-		if err != nil {
-			return nil, err
-		}
-		weeklySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "week")
-		if err != nil {
-			return nil, err
-		}
-		monthlySpecial, err := s.getPeriodDistribution([]string{orgTagPrefix + *id}, codioSpecialTag, "month")
-		if err != nil {
-			return nil, err
-		}
 		dailyProvided, err := s.getDailyDistribution([]string{orgTagPrefix + *id}, codioProvidedTag)
 		if err != nil {
 			return nil, err
@@ -740,9 +728,6 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			Id:                               *id,
 			Costs:                            *costs,
 			Courses:                          courses,
-			DailySpecialDistribution:         dailySpecial,
-			WeeklySpecialDistribution:        weeklySpecial,
-			MonthlySpecialDistribution:       monthlySpecial,
 			DailyCodioProvidedDistribution:   dailyProvided,
 			WeeklyCodioProvidedDistribution:  weeklyProvided,
 			MonthlyCodioProvidedDistribution: monthlyProvided,
@@ -758,18 +743,6 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 			return nil, err
 		}
 
-		dailySpecial, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioSpecialTag)
-		if err != nil {
-			return nil, err
-		}
-		weeklySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "week")
-		if err != nil {
-			return nil, err
-		}
-		monthlySpecial, err := s.getPeriodDistribution([]string{courseTagPrefix + *id}, codioSpecialTag, "month")
-		if err != nil {
-			return nil, err
-		}
 		dailyProvided, err := s.getDailyDistribution([]string{courseTagPrefix + *id}, codioProvidedTag)
 		if err != nil {
 			return nil, err
@@ -790,9 +763,6 @@ func (s *Store) GetStatisticsData(level event.StatisticLevel, id *string) (*even
 		result.CourseStatisticsData = &event.CourseStatisticsData{
 			Id:                               *id,
 			Costs:                            *costs,
-			DailySpecialDistribution:         dailySpecial,
-			WeeklySpecialDistribution:        weeklySpecial,
-			MonthlySpecialDistribution:       monthlySpecial,
 			DailyCodioProvidedDistribution:   dailyProvided,
 			WeeklyCodioProvidedDistribution:  weeklyProvided,
 			MonthlyCodioProvidedDistribution: monthlyProvided,
@@ -809,16 +779,13 @@ const negligibleCostThreshold = 0.01
 
 func isNegligibleCostPack(costs event.CostPack) bool {
 	return costs.CodioProvided.OneMonth <= negligibleCostThreshold &&
-		costs.CodioProvided.FiveMonth <= negligibleCostThreshold &&
-		costs.CodioSpecial.OneMonth <= negligibleCostThreshold &&
-		costs.CodioSpecial.FiveMonth <= negligibleCostThreshold
+		costs.CodioProvided.FiveMonth <= negligibleCostThreshold
 }
 
 const (
 	orgTagPrefix          = "org-tag-"
 	userTagPrefix         = "user-tag-"
 	courseTagPrefix       = "course-tag-"
-	codioSpecialTag       = "codio-special"
 	codioProvidedTag      = "codio-provided"
 	statisticsLookbackAge = -5 * 30 * 24 * time.Hour
 )
@@ -842,15 +809,13 @@ func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[str
 		SELECT
 			regexp_replace(tag.tag, '^' || $1, '') AS grouped_id,
 			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
-			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
-			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.created_at >= $2 AND e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
-			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+			COALESCE(SUM(e.cost_in_usd) FILTER (WHERE e.tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month
 		FROM events e,
 		LATERAL unnest(e.tags) AS tag(tag)
 		WHERE tag.tag LIKE $1 || '%%'
 			AND %s
 		GROUP BY regexp_replace(tag.tag, '^' || $1, '')
-	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+	`, codioProvidedTag, codioProvidedTag, strings.Join(conditions, " AND "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -870,8 +835,6 @@ func (s *Store) getGroupedCostPack(groupBy string, filterTags []string) (map[str
 			&id,
 			&pack.CodioProvided.OneMonth,
 			&pack.CodioProvided.FiveMonth,
-			&pack.CodioSpecial.OneMonth,
-			&pack.CodioSpecial.FiveMonth,
 		); err2 != nil {
 			return nil, err2
 		}
@@ -903,12 +866,10 @@ func (s *Store) getTotalCostPack(filterTags []string) (*event.CostPack, error) {
 	query := fmt.Sprintf(`
 		SELECT
 			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_one_month,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE created_at >= $1 AND tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_one_month,
-			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_special_five_month
+			COALESCE(SUM(cost_in_usd) FILTER (WHERE tags @> ARRAY['%s']::varchar[]), 0) AS codio_provided_five_month
 		FROM events
 		WHERE %s
-	`, codioProvidedTag, codioProvidedTag, codioSpecialTag, codioSpecialTag, strings.Join(conditions, " AND "))
+	`, codioProvidedTag, codioProvidedTag, strings.Join(conditions, " AND "))
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rt)
 	defer cancel()
@@ -917,8 +878,6 @@ func (s *Store) getTotalCostPack(filterTags []string) (*event.CostPack, error) {
 	if err := s.db.QueryRowContext(ctx, query, args...).Scan(
 		&pack.CodioProvided.OneMonth,
 		&pack.CodioProvided.FiveMonth,
-		&pack.CodioSpecial.OneMonth,
-		&pack.CodioSpecial.FiveMonth,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return pack, nil

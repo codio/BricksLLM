@@ -156,7 +156,6 @@ type Cost struct {
 
 type CostPack struct {
 	CodioProvided Cost `json:"codioProvided"`
-	CodioSpecial  Cost `json:"codioSpecial"`
 }
 
 type FinancialKpis struct {
@@ -213,9 +212,6 @@ type OrgStatisticsData struct {
 	Id                               string                             `json:"id"`
 	Costs                            CostPack                           `json:"costs"`
 	Courses                          []ShortCourseStatisticsData        `json:"courses"`
-	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
-	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
-	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
 	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
 	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
 	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
@@ -225,9 +221,6 @@ type OrgStatisticsData struct {
 type CourseStatisticsData struct {
 	Id                               string                             `json:"id"`
 	Costs                            CostPack                           `json:"costs"`
-	DailySpecialDistribution         []DailySpendDistributionDataPoint  `json:"dailySpecialDistribution"`
-	WeeklySpecialDistribution        []PeriodSpendDistributionDataPoint `json:"weeklySpecialDistribution"`
-	MonthlySpecialDistribution       []PeriodSpendDistributionDataPoint `json:"monthlySpecialDistribution"`
 	DailyCodioProvidedDistribution   []DailySpendDistributionDataPoint  `json:"dailyCodioProvidedDistribution"`
 	WeeklyCodioProvidedDistribution  []PeriodSpendDistributionDataPoint `json:"weeklyCodioProvidedDistribution"`
 	MonthlyCodioProvidedDistribution []PeriodSpendDistributionDataPoint `json:"monthlyCodioProvidedDistribution"`
