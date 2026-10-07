@@ -90,12 +90,12 @@ type StatisticsRequest struct {
 
 func (r *StatisticsRequest) GetCacheKey() string {
 	if r.Level == "all" {
-		return "test:" + r.Level
+		return "statistics:" + r.Level
 	}
 	if r.Id != nil {
-		return "test:" + r.Level + ":" + *r.Id
+		return "statistics:" + r.Level + ":" + *r.Id
 	}
-	return "test:" + r.Level
+	return "statistics:" + r.Level
 }
 
 type StatisticLevel string
