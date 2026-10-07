@@ -268,7 +268,7 @@ func (rm *ReportingManager) backgroundCollectStatisticsData(cacheKey string, lev
 		}
 		return
 	}
-	_ = rm.sc.Set(cacheKey, statisticsData, time.Minute*30)
+	_ = rm.sc.Set(cacheKey, statisticsData, time.Hour*24)
 }
 
 func (rm *ReportingManager) GetCustomIds(keyId string) ([]string, error) {
