@@ -703,7 +703,7 @@ func (h *Handler) decorateEvent(m Message) error {
 				e.Event.CostInUsd = cost + completionCost
 
 				if e.CostMap != nil {
-					model := openai.ModelWithContextLength(e.Event.Model, int64(tks+completiontks))
+					model := provider.ModelWithContextLength(e.Event.Model, int64(tks+completiontks))
 					newCost, err := provider.EstimateTotalCostWithCostMaps(model, tks, completiontks, 1000, e.CostMap.PromptCostPerModel, e.CostMap.CompletionCostPerModel)
 					if err != nil {
 						h.log.Debug("error when estimating total cost with cost maps", zap.Error(err))
