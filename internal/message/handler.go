@@ -24,7 +24,7 @@ import (
 
 type anthropicEstimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
-	EstimateCompletionCost(model string, tks int) (float64, error)
+	EstimateCompletionCost(model string, promptTks, completionTks int) (float64, error)
 	EstimatePromptCost(model string, tks int) (float64, error)
 	Count(input string) int
 }
@@ -523,7 +523,7 @@ func (h *Handler) decorateEvent(m Message) error {
 		completiontks := h.ae.Count(e.Content)
 		completiontks += anthropicCompletionMagicNum
 
-		completionCost, err := h.ae.EstimateCompletionCost(model, completiontks)
+		completionCost, err := h.ae.EstimateCompletionCost(model, tks, completiontks)
 		if err != nil {
 			telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 			return err
@@ -562,7 +562,7 @@ func (h *Handler) decorateEvent(m Message) error {
 			completiontks := h.ae.Count(e.Content)
 			completiontks += anthropicCompletionMagicNum
 
-			completionCost, err := h.ae.EstimateCompletionCost(translatedModel, completiontks)
+			completionCost, err := h.ae.EstimateCompletionCost(translatedModel, tks, completiontks)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 				return err

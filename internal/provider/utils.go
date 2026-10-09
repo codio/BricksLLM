@@ -21,7 +21,7 @@ var modelWithLengthCtx = []ModelContextLenght{
 	ModelContextLenght{Model: "gpt-5.4-pro", Tokens: 272000},
 
 	// anthropic
-	ModelContextLenght{Model: "claude-haiku-5-5", Tokens: 100000},
+	ModelContextLenght{Model: "claude-haiku-5-5", Tokens: 100001},
 }
 
 func ModelWithContextLength(model string, tokens int64) string {

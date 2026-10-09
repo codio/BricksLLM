@@ -96,7 +96,7 @@ func NewCostEstimator(tc tokenCounter) *CostEstimator {
 
 func (ce *CostEstimator) EstimateTotalCost(model string, promptTks, completionTks int) (float64, error) {
 	normalized := normalizeAnthropicModel(model)
-	modelWithCtx := provider.ModelWithContextLength(normalized, int64(promptTks+completionTks))
+	modelWithCtx := provider.ModelWithContextLength(normalized, int64(promptTks))
 
 	promptCost, err := ce.estimateCost("prompt", modelWithCtx, promptTks)
 	if err != nil {
@@ -228,9 +228,9 @@ func convertAmazonModelToAnthropicModel(model string) string {
 	return SelectModel(parts[2])
 }
 
-func (ce *CostEstimator) EstimateCompletionCost(model string, tks int) (float64, error) {
-	modelWithCtx := provider.ModelWithContextLength(normalizeAnthropicModel(model), int64(tks))
-	return ce.estimateCost("completion", modelWithCtx, tks)
+func (ce *CostEstimator) EstimateCompletionCost(model string, promptTks, completionTks int) (float64, error) {
+	modelWithCtx := provider.ModelWithContextLength(normalizeAnthropicModel(model), int64(promptTks))
+	return ce.estimateCost("completion", modelWithCtx, completionTks)
 }
 
 func (ce *CostEstimator) Count(input string) int {
