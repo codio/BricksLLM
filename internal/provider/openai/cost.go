@@ -541,42 +541,34 @@ func (ce *CostEstimator) EstimateChatCompletionPromptTokenCounts(model string, r
 	return tks, nil
 }
 
-func (ce *CostEstimator) EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error) {
-	if len(r.Model) == 0 {
-		return 0, 0, errors.New("model is not provided")
-	}
-
-	tks, err := countTotalTokens(r.Model, r, ce.tc)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	model := provider.ModelWithContextLength(r.Model, int64(tks))
-	cost, err := ce.EstimatePromptCost(model, tks)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return tks, cost, nil
-}
-
-func (ce *CostEstimator) EstimateChatCompletionStreamCostWithTokenCounts(model string, content string) (int, float64, error) {
+// EstimateChatCompletionStreamCostWithTokenCounts estimates the cost of a
+// streamed chat completion. promptTks must be the already-counted prompt
+// token count so that the long/short context tier is picked using
+// promptTks+completionTks, matching the tiering used by EstimateTotalCost
+// for non-streaming requests.
+func (ce *CostEstimator) EstimateChatCompletionStreamCostWithTokenCounts(model string, promptTks int, content string) (int, float64, float64, error) {
 	if len(model) == 0 {
-		return 0, 0, errors.New("model is not provided")
+		return 0, 0, 0, errors.New("model is not provided")
 	}
 
 	tks, err := ce.tc.Count(model, content)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	model = provider.ModelWithContextLength(model, int64(tks))
-	cost, err := ce.EstimateCompletionCost(model, tks)
+	tieredModel := provider.ModelWithContextLength(model, int64(promptTks+tks))
+
+	promptCost, err := ce.EstimatePromptCost(tieredModel, promptTks)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	return tks, cost, nil
+	completionCost, err := ce.EstimateCompletionCost(tieredModel, tks)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return tks, promptCost, completionCost, nil
 }
 
 func (ce *CostEstimator) EstimateCompletionsRequestCostWithTokenCounts(model string, content any) (int, float64, error) {

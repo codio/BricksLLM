@@ -52,9 +52,8 @@ type keyStorage interface {
 type estimator interface {
 	EstimateTranscriptionCost(secs float64, model string, usage *openai.TranscriptionResponseUsage) (float64, error)
 	EstimateSpeechCost(input string, model string) (float64, error)
-	EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error)
 	EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (float64, error)
-	EstimateChatCompletionStreamCostWithTokenCounts(model, content string) (int, float64, error)
+	EstimateChatCompletionStreamCostWithTokenCounts(model string, promptTks int, content string) (int, float64, float64, error)
 	EstimateCompletionCost(model string, tks int) (float64, error)
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)

@@ -33,9 +33,8 @@ type estimator interface {
 	EstimateCompletionsRequestCostWithTokenCounts(model string, content any) (int, float64, error)
 	EstimateCompletionsStreamCostWithTokenCounts(model string, content string) (int, float64, error)
 	EstimateSpeechCost(input string, model string) (float64, error)
-	EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error)
 	EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (float64, error)
-	EstimateChatCompletionStreamCostWithTokenCounts(model, content string) (int, float64, error)
+	EstimateChatCompletionStreamCostWithTokenCounts(model string, promptTks int, content string) (int, float64, float64, error)
 	EstimateCompletionCost(model string, tks int) (float64, error)
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
@@ -684,13 +683,13 @@ func (h *Handler) decorateEvent(m Message) error {
 		}
 
 		if ccr.Stream {
-			tks, cost, err := h.e.EstimateChatCompletionPromptCostWithTokenCounts(ccr)
+			tks, err := h.e.EstimateChatCompletionPromptTokenCounts(ccr.Model, ccr)
 			if err != nil {
-				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_prompt_cost_with_token_counts", nil, 1)
+				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_prompt_token_counts", nil, 1)
 				return err
 			}
 
-			completiontks, completionCost, err := h.e.EstimateChatCompletionStreamCostWithTokenCounts(e.Event.Model, e.Content)
+			completiontks, cost, completionCost, err := h.e.EstimateChatCompletionStreamCostWithTokenCounts(e.Event.Model, tks, e.Content)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_stream_cost_with_token_counts", nil, 1)
 				return err
