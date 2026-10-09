@@ -162,7 +162,7 @@ func getBedrockCompletionHandler(prod bool, e anthropicEstimator) gin.HandlerFun
 		defer func() {
 			model := c.GetString("model")
 			translatedModel := util.TranslateBedrockModelToAnthropicModel(model)
-			compeltionCost, err := e.EstimateCompletionCost(translatedModel, completionTokenCount)
+			compeltionCost, err := e.EstimateCompletionCost(translatedModel, promptTokenCount, completionTokenCount)
 			if err != nil {
 				telemetry.Incr("bricksllm.proxy.get_bedrock_completion_handler.estimate_completion_cost_error", nil, 1)
 				logError(log, "error when estimating bedrock completion cost", prod, err)
@@ -437,7 +437,7 @@ func getBedrockMessagesHandler(prod bool, e anthropicEstimator) gin.HandlerFunc 
 		defer func() {
 			model := c.GetString("model")
 			translatedModel := util.TranslateBedrockModelToAnthropicModel(model)
-			compeltionCost, err := e.EstimateCompletionCost(translatedModel, completionTokenCount)
+			compeltionCost, err := e.EstimateCompletionCost(translatedModel, promptTokenCount, completionTokenCount)
 			if err != nil {
 				telemetry.Incr("bricksllm.proxy.get_bedrock_messages_handler.estimate_completion_cost_error", nil, 1)
 				logError(log, "error when estimating bedrock completion cost", prod, err)

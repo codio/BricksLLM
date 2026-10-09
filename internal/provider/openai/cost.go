@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/bricks-cloud/bricksllm/internal/provider"
 	"github.com/bricks-cloud/bricksllm/internal/util"
 	responsesOpenai "github.com/openai/openai-go/responses"
 	goopenai "github.com/sashabaranov/go-openai"
@@ -40,6 +41,21 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"gpt-image-1":          0.005,
 		"chatgpt-image-latest": 0.005,
 		"gpt-image-1-mini":     0.002,
+
+		"gpt-6-astra":       0.020,
+		"gpt-6-astra~long":  0.020,
+		"gpt-6-astra~short": 0.010,
+		"gpt-6.1-sol":       0.004,
+		"gpt-6.1-sol~long":  0.004,
+		"gpt-6.1-sol~short": 0.002,
+		"gpt-6-luna":        0.0002,
+		"gpt-6-luna~long":   0.0002,
+		"gpt-6-luna~short":  0.0001,
+
+		"gpt-5.6-sol":       0.008,
+		"gpt-5.6-sol~long":  0.008,
+		"gpt-5.6-sol~short": 0.004,
+		"gpt-5.6-cyber":     0.0125,
 
 		"gpt-5.5":           0.01,
 		"gpt-5.5~long":      0.01,
@@ -122,6 +138,21 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 		"babbage-002":                  0.000400,
 	},
 	"cached-prompt": {
+		"gpt-6-astra":       0.002,
+		"gpt-6-astra~long":  0.002,
+		"gpt-6-astra~short": 0.001,
+		"gpt-6.1-sol":       0.0002,
+		"gpt-6.1-sol~long":  0.0002,
+		"gpt-6.1-sol~short": 0.0001,
+		"gpt-6-luna":        0.00002,
+		"gpt-6-luna~long":   0.00002,
+		"gpt-6-luna~short":  0.00001,
+
+		"gpt-5.6-sol":       0.0008,
+		"gpt-5.6-sol~long":  0.0008,
+		"gpt-5.6-sol~short": 0.0004,
+		"gpt-5.6-cyber":     0.00125,
+
 		"gpt-5.5":       0.001,
 		"gpt-5.5~long":  0.001,
 		"gpt-5.5~short": 0.0005,
@@ -212,6 +243,21 @@ var OpenAiPerThousandTokenCost = map[string]map[string]float64{
 	"completion": {
 		"gpt-image-1.5":        0.010,
 		"chatgpt-image-latest": 0.010,
+
+		"gpt-6-astra":       0.075,
+		"gpt-6-astra~long":  0.075,
+		"gpt-6-astra~short": 0.05,
+		"gpt-6.1-sol":       0.015,
+		"gpt-6.1-sol~long":  0.015,
+		"gpt-6.1-sol~short": 0.01,
+		"gpt-6-luna":        0.00075,
+		"gpt-6-luna~long":   0.00075,
+		"gpt-6-luna~short":  0.0005,
+
+		"gpt-5.6-sol":       0.03,
+		"gpt-5.6-sol~long":  0.03,
+		"gpt-5.6-sol~short": 0.02,
+		"gpt-5.6-cyber":     0.075,
 
 		"gpt-5.5":           0.045,
 		"gpt-5.5~long":      0.045,
@@ -425,7 +471,7 @@ func NewCostEstimator(m map[string]map[string]float64, tc tokenCounter) *CostEst
 
 func (ce *CostEstimator) EstimateTotalCost(model string, promptTks, completionTks int) (float64, error) {
 	totalTokens := int64(promptTks + completionTks)
-	model = ModelWithContextLength(model, totalTokens)
+	model = provider.ModelWithContextLength(model, totalTokens)
 	promptCost, err := ce.EstimatePromptCost(model, promptTks)
 	if err != nil {
 		return 0, err
@@ -495,42 +541,34 @@ func (ce *CostEstimator) EstimateChatCompletionPromptTokenCounts(model string, r
 	return tks, nil
 }
 
-func (ce *CostEstimator) EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error) {
-	if len(r.Model) == 0 {
-		return 0, 0, errors.New("model is not provided")
-	}
-
-	tks, err := countTotalTokens(r.Model, r, ce.tc)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	model := ModelWithContextLength(r.Model, int64(tks))
-	cost, err := ce.EstimatePromptCost(model, tks)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return tks, cost, nil
-}
-
-func (ce *CostEstimator) EstimateChatCompletionStreamCostWithTokenCounts(model string, content string) (int, float64, error) {
+// EstimateChatCompletionStreamCostWithTokenCounts estimates the cost of a
+// streamed chat completion. promptTks must be the already-counted prompt
+// token count so that the long/short context tier is picked using
+// promptTks+completionTks, matching the tiering used by EstimateTotalCost
+// for non-streaming requests.
+func (ce *CostEstimator) EstimateChatCompletionStreamCostWithTokenCounts(model string, promptTks int, content string) (int, float64, float64, error) {
 	if len(model) == 0 {
-		return 0, 0, errors.New("model is not provided")
+		return 0, 0, 0, errors.New("model is not provided")
 	}
 
 	tks, err := ce.tc.Count(model, content)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	model = ModelWithContextLength(model, int64(tks))
-	cost, err := ce.EstimateCompletionCost(model, tks)
+	tieredModel := provider.ModelWithContextLength(model, int64(promptTks+tks))
+
+	promptCost, err := ce.EstimatePromptCost(tieredModel, promptTks)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 
-	return tks, cost, nil
+	completionCost, err := ce.EstimateCompletionCost(tieredModel, tks)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+
+	return tks, promptCost, completionCost, nil
 }
 
 func (ce *CostEstimator) EstimateCompletionsRequestCostWithTokenCounts(model string, content any) (int, float64, error) {
@@ -850,7 +888,7 @@ func (ce *CostEstimator) EstimateResponseApiTotalCost(model string, usage respon
 	outputTokens := usage.OutputTokens
 
 	totalTokens := inputTokens + cachedInputTokens + outputTokens
-	model = ModelWithContextLength(model, totalTokens)
+	model = provider.ModelWithContextLength(model, totalTokens)
 
 	cachedInputCost, err := ce.estimateResponseApiTokensCost("cached-prompt", model, cachedInputTokens)
 	if err != nil {
@@ -1109,26 +1147,4 @@ func countTotalTokens(model string, r *goopenai.ChatCompletionRequest, tc tokenC
 	}
 
 	return tks + ftks + mtks, err
-}
-
-var modelWithLengthCtx = []string{
-	"gpt-5.5",
-	"gpt-5.5-pro",
-	"gpt-5.4",
-	"gpt-5.4-pro",
-}
-
-func ModelWithContextLength(model string, tokens int64) string {
-	trimmed := strings.TrimSpace(model)
-	if slices.Contains(modelWithLengthCtx, trimmed) {
-		return trimmed + contextLengthSuffixByTokens(tokens)
-	}
-	return trimmed
-}
-
-func contextLengthSuffixByTokens(tokens int64) string {
-	if tokens >= 272000 {
-		return "~long"
-	}
-	return "~short"
 }

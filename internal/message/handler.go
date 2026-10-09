@@ -24,7 +24,7 @@ import (
 
 type anthropicEstimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
-	EstimateCompletionCost(model string, tks int) (float64, error)
+	EstimateCompletionCost(model string, promptTks, completionTks int) (float64, error)
 	EstimatePromptCost(model string, tks int) (float64, error)
 	Count(input string) int
 }
@@ -33,9 +33,8 @@ type estimator interface {
 	EstimateCompletionsRequestCostWithTokenCounts(model string, content any) (int, float64, error)
 	EstimateCompletionsStreamCostWithTokenCounts(model string, content string) (int, float64, error)
 	EstimateSpeechCost(input string, model string) (float64, error)
-	EstimateChatCompletionPromptCostWithTokenCounts(r *goopenai.ChatCompletionRequest) (int, float64, error)
 	EstimateEmbeddingsCost(r *goopenai.EmbeddingRequest) (float64, error)
-	EstimateChatCompletionStreamCostWithTokenCounts(model, content string) (int, float64, error)
+	EstimateChatCompletionStreamCostWithTokenCounts(model string, promptTks int, content string) (int, float64, float64, error)
 	EstimateCompletionCost(model string, tks int) (float64, error)
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
 	EstimateEmbeddingsInputCost(model string, tks int) (float64, error)
@@ -523,7 +522,7 @@ func (h *Handler) decorateEvent(m Message) error {
 		completiontks := h.ae.Count(e.Content)
 		completiontks += anthropicCompletionMagicNum
 
-		completionCost, err := h.ae.EstimateCompletionCost(model, completiontks)
+		completionCost, err := h.ae.EstimateCompletionCost(model, tks, completiontks)
 		if err != nil {
 			telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 			return err
@@ -562,7 +561,7 @@ func (h *Handler) decorateEvent(m Message) error {
 			completiontks := h.ae.Count(e.Content)
 			completiontks += anthropicCompletionMagicNum
 
-			completionCost, err := h.ae.EstimateCompletionCost(translatedModel, completiontks)
+			completionCost, err := h.ae.EstimateCompletionCost(translatedModel, tks, completiontks)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_completion_cost_error", nil, 1)
 				return err
@@ -684,13 +683,13 @@ func (h *Handler) decorateEvent(m Message) error {
 		}
 
 		if ccr.Stream {
-			tks, cost, err := h.e.EstimateChatCompletionPromptCostWithTokenCounts(ccr)
+			tks, err := h.e.EstimateChatCompletionPromptTokenCounts(ccr.Model, ccr)
 			if err != nil {
-				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_prompt_cost_with_token_counts", nil, 1)
+				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_prompt_token_counts", nil, 1)
 				return err
 			}
 
-			completiontks, completionCost, err := h.e.EstimateChatCompletionStreamCostWithTokenCounts(e.Event.Model, e.Content)
+			completiontks, cost, completionCost, err := h.e.EstimateChatCompletionStreamCostWithTokenCounts(e.Event.Model, tks, e.Content)
 			if err != nil {
 				telemetry.Incr("bricksllm.message.handler.decorate_event.estimate_chat_completion_stream_cost_with_token_counts", nil, 1)
 				return err
@@ -703,13 +702,15 @@ func (h *Handler) decorateEvent(m Message) error {
 				e.Event.CostInUsd = cost + completionCost
 
 				if e.CostMap != nil {
-					model := openai.ModelWithContextLength(e.Event.Model, int64(tks+completiontks))
+					model := provider.ModelWithContextLength(e.Event.Model, int64(tks+completiontks))
 					newCost, err := provider.EstimateTotalCostWithCostMaps(model, tks, completiontks, 1000, e.CostMap.PromptCostPerModel, e.CostMap.CompletionCostPerModel)
+					if err != nil {
+						newCost, err = provider.EstimateTotalCostWithCostMaps(e.Event.Model, tks, completiontks, 1000, e.CostMap.PromptCostPerModel, e.CostMap.CompletionCostPerModel)
+					}
 					if err != nil {
 						h.log.Debug("error when estimating total cost with cost maps", zap.Error(err))
 						telemetry.Incr("bricksllm.proxy.decorate_event.estimate_total_cost_with_cost_maps_error", nil, 1)
-					}
-
+ 					}
 					if newCost != 0 {
 						e.Event.CostInUsd = newCost
 					}

@@ -22,7 +22,7 @@ import (
 
 type anthropicEstimator interface {
 	EstimateTotalCost(model string, promptTks, completionTks int) (float64, error)
-	EstimateCompletionCost(model string, tks int) (float64, error)
+	EstimateCompletionCost(model string, promptTks, completionTks int) (float64, error)
 	EstimatePromptCost(model string, tks int) (float64, error)
 	Count(input string) int
 	CountMessagesTokens(messages []anthropic.Message) int
@@ -425,7 +425,7 @@ func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstim
 		defer func() {
 			tks := response.Usage.OutputTokens
 			model := c.GetString("model")
-			cost, err := e.EstimateCompletionCost(model, tks)
+			cost, err := e.EstimateCompletionCost(model, response.Usage.InputTokens, tks)
 			if err != nil {
 				telemetry.Incr("bricksllm.proxy.get_messages_handler.estimate_messages_cost_error", nil, 1)
 				logError(log, "error when estimating anthropic messages stream cost", prod, err)
