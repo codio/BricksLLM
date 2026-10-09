@@ -705,10 +705,12 @@ func (h *Handler) decorateEvent(m Message) error {
 					model := provider.ModelWithContextLength(e.Event.Model, int64(tks+completiontks))
 					newCost, err := provider.EstimateTotalCostWithCostMaps(model, tks, completiontks, 1000, e.CostMap.PromptCostPerModel, e.CostMap.CompletionCostPerModel)
 					if err != nil {
+						newCost, err = provider.EstimateTotalCostWithCostMaps(e.Event.Model, tks, completiontks, 1000, e.CostMap.PromptCostPerModel, e.CostMap.CompletionCostPerModel)
+					}
+					if err != nil {
 						h.log.Debug("error when estimating total cost with cost maps", zap.Error(err))
 						telemetry.Incr("bricksllm.proxy.decorate_event.estimate_total_cost_with_cost_maps_error", nil, 1)
-					}
-
+ 					}
 					if newCost != 0 {
 						e.Event.CostInUsd = newCost
 					}
