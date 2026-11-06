@@ -17,7 +17,7 @@ import (
 	goopenai "github.com/sashabaranov/go-openai"
 )
 
-func getChatCompletionHandler(prod, private bool, client http.Client, e estimator) gin.HandlerFunc {
+func getChatCompletionHandler(prod, private bool, client http.Client, e estimator, signer requestSigner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.proxy.get_chat_completion_handler.requests", nil, 1)
@@ -30,21 +30,14 @@ func getChatCompletionHandler(prod, private bool, client http.Client, e estimato
 		ctx, cancel := context.WithTimeout(context.Background(), c.GetDuration("requestTimeout"))
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.openai.com/v1/chat/completions", c.Request.Body)
+		req, err := newProviderRequest(ctx, c, signer, "https://api.openai.com/v1/chat/completions", "/openai/v1/chat/completions")
 		if err != nil {
 			logError(log, "error when creating openai http request", prod, err)
-			JSON(c, http.StatusInternalServerError, "[BricksLLM] failed to create azure openai http request")
+			JSON(c, http.StatusInternalServerError, "[BricksLLM] failed to create openai http request")
 			return
 		}
 
-		copyHttpHeaders(c.Request, req, c.GetBool("removeUserAgent"))
-
 		isStreaming := c.GetBool("stream")
-		if isStreaming {
-			req.Header.Set("Accept", "text/event-stream")
-			req.Header.Set("Cache-Control", "no-cache")
-			req.Header.Set("Connection", "keep-alive")
-		}
 
 		start := time.Now()
 		res, err := client.Do(req)

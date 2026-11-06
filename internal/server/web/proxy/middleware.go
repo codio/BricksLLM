@@ -385,6 +385,19 @@ func getMiddleware(cpm CustomProvidersManager, rm routeManager, pm PoliciesManag
 					c.Set("vllmUrl", selected.Setting["url"])
 				}
 			}
+
+			target, err := bedrockIamTargetFromSetting(selected)
+			if err != nil {
+				telemetry.Incr("bricksllm.proxy.get_middleware.bedrock_iam_setting_error", nil, 1)
+				logError(logWithCid, "error when reading bedrock iam provider setting", prod, err)
+				JSON(c, http.StatusInternalServerError, "[BricksLLM] invalid bedrock provider setting")
+				c.Abort()
+				return
+			}
+
+			if target != nil {
+				c.Set(bedrockTargetContextKey, target)
+			}
 		}
 
 		p := pm.GetPolicyByIdFromMemdb(kc.PolicyId)

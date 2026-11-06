@@ -19,7 +19,7 @@ import (
 	goopenai "github.com/sashabaranov/go-openai"
 )
 
-func getResponsesHandler(prod, private bool, client http.Client, e estimator) gin.HandlerFunc {
+func getResponsesHandler(prod, private bool, client http.Client, e estimator, signer requestSigner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.proxy.get_responses_handler.requests", nil, 1)
@@ -35,21 +35,14 @@ func getResponsesHandler(prod, private bool, client http.Client, e estimator) gi
 		wildcard := c.Param("wildcard")
 		url := fmt.Sprintf("https://api.openai.com/v1/responses%s", wildcard)
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, c.Request.Body)
+		req, err := newProviderRequest(ctx, c, signer, url, "/openai/v1/responses"+wildcard)
 		if err != nil {
 			logError(log, "error when creating openai http request", prod, err)
 			JSON(c, http.StatusInternalServerError, "[BricksLLM] failed to create openai http request")
 			return
 		}
 
-		copyHttpHeaders(c.Request, req, c.GetBool("removeUserAgent"))
-
 		isStreaming := c.GetBool("stream")
-		if isStreaming {
-			req.Header.Set("Accept", "text/event-stream")
-			req.Header.Set("Cache-Control", "no-cache")
-			req.Header.Set("Connection", "keep-alive")
-		}
 
 		start := time.Now()
 		res, err := client.Do(req)

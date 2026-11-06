@@ -88,6 +88,13 @@ func rewriteHttpAuthHeader(req *http.Request, setting *provider.Setting) error {
 		return nil
 	}
 
+	if setting.UsesBedrockIam() {
+		req.Header.Del("Authorization")
+		req.Header.Del("x-api-key")
+		req.Header.Del("api-key")
+		return nil
+	}
+
 	apiKey := setting.GetParam("apikey")
 
 	if strings.HasPrefix(uri, "/api/providers/vllm") {
@@ -164,6 +171,30 @@ func (a *Authenticator) getProviderSettingsThatCanAccessCustomRoute(path string,
 	}
 
 	return selected
+}
+
+var bedrockIamPaths = []string{
+	"/api/providers/anthropic/v1/messages",
+	"/api/providers/openai/v1/chat/completions",
+	"/api/providers/openai/v1/responses",
+}
+
+func canBedrockIamAccessPath(path string) bool {
+	for _, p := range bedrockIamPaths {
+		if path == p {
+			return true
+		}
+	}
+
+	return strings.HasPrefix(path, "/api/providers/openai/v1/responses/")
+}
+
+func canSettingAccessPath(setting *provider.Setting, path string) bool {
+	if setting.UsesBedrockIam() && !canBedrockIamAccessPath(path) {
+		return false
+	}
+
+	return canAccessPath(setting.Provider, path)
 }
 
 func canAccessPath(provider string, path string) bool {
@@ -309,7 +340,7 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 			continue
 		}
 
-		if canAccessPath(setting.Provider, req.URL.Path) {
+		if canSettingAccessPath(setting, req.URL.Path) {
 			selected = append(selected, setting)
 		}
 
@@ -327,7 +358,11 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 	if len(selected) != 0 {
 		used := selected[0]
 		if rKey.RotationEnabled {
-			used = selected[rand.Intn(len(selected))]
+			index := rand.Intn(len(selected))
+			used = selected[index]
+			if !strings.HasPrefix(req.URL.Path, "/api/routes") {
+				selected[0], selected[index] = selected[index], selected[0]
+			}
 		}
 
 		if a.decryptor.Enabled() {
@@ -358,5 +393,5 @@ func (a *Authenticator) AuthenticateHttpRequest(req *http.Request, xCustomProvid
 		return rKey, selected, nil
 	}
 
-	return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("provider setting not found for key %s", raw))
+	return nil, nil, internal_errors.NewAuthError(fmt.Sprintf("provider setting not found for key %s", anonymize(raw)))
 }

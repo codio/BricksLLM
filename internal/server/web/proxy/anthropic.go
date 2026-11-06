@@ -297,7 +297,7 @@ var (
 	eventContentBlockStop  = []byte("event: content_block_stop")
 )
 
-func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstimator) gin.HandlerFunc {
+func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstimator, signer requestSigner) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		log := util.GetLogFromCtx(c)
 		telemetry.Incr("bricksllm.proxy.get_messages_handler.requests", nil, 1)
@@ -310,7 +310,7 @@ func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstim
 		ctx, cancel := context.WithTimeout(context.Background(), c.GetDuration("requestTimeout"))
 		defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.anthropic.com/v1/messages", c.Request.Body)
+		req, err := newProviderRequest(ctx, c, signer, "https://api.anthropic.com/v1/messages", "/anthropic/v1/messages")
 		if err != nil {
 			logError(log, "error when creating anthropic http request", prod, err)
 			JSON(c, http.StatusInternalServerError, "[BricksLLM] failed to create anthropic http request")
@@ -325,14 +325,7 @@ func getMessagesHandler(prod, private bool, client http.Client, e anthropicEstim
 			return
 		}
 
-		copyHttpHeaders(c.Request, req, c.GetBool("removeUserAgent"))
-
 		isStreaming := c.GetBool("stream")
-		if isStreaming {
-			req.Header.Set("Accept", "text/event-stream")
-			req.Header.Set("Cache-Control", "no-cache")
-			req.Header.Set("Connection", "keep-alive")
-		}
 
 		start := time.Now()
 		res, err := client.Do(req)

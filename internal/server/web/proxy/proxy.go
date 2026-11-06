@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/bricks-cloud/bricksllm/internal/bedrockiam"
 	"github.com/bricks-cloud/bricksllm/internal/event"
 	"github.com/bricks-cloud/bricksllm/internal/key"
 	"github.com/bricks-cloud/bricksllm/internal/pii"
@@ -100,6 +102,12 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 		Transport: baseTransport,
 	}
 
+	awsConfig, err := config.LoadDefaultConfig(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("load aws config for bedrock iam: %w", err)
+	}
+	bedrockSigner := bedrockiam.NewSigner(awsConfig)
+
 	// health check
 	router.POST("/api/health", getGetHealthCheckHandler())
 
@@ -121,12 +129,12 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 	router.GET("/api/providers/openai/v1/videos/:video_id/content", getVideoHandler(prod, client, e))
 
 	// completions
-	router.POST("/api/providers/openai/v1/chat/completions", getChatCompletionHandler(prod, private, client, e))
+	router.POST("/api/providers/openai/v1/chat/completions", getChatCompletionHandler(prod, private, client, e, bedrockSigner))
 
 	// responses
 	// https://api.openai.com/v1/responses
-	router.POST("/api/providers/openai/v1/responses", getResponsesHandler(prod, private, client, e))
-	router.POST("/api/providers/openai/v1/responses/*wildcard", getResponsesHandler(prod, private, client, e))
+	router.POST("/api/providers/openai/v1/responses", getResponsesHandler(prod, private, client, e, bedrockSigner))
+	router.POST("/api/providers/openai/v1/responses/*wildcard", getResponsesHandler(prod, private, client, e, bedrockSigner))
 
 	// embeddings
 	router.POST("/api/providers/openai/v1/embeddings", getEmbeddingHandler(prod, private, client, e))
@@ -204,7 +212,7 @@ func NewProxyServer(log *zap.Logger, mode, privacyMode string, c cache, m KeyMan
 
 	// anthropic
 	router.POST("/api/providers/anthropic/v1/complete", getCompletionHandler(prod, private, client))
-	router.POST("/api/providers/anthropic/v1/messages", getMessagesHandler(prod, private, client, ae))
+	router.POST("/api/providers/anthropic/v1/messages", getMessagesHandler(prod, private, client, ae, bedrockSigner))
 
 	// bedrock anthropic
 	router.POST("/api/providers/bedrock/anthropic/v1/complete", getBedrockCompletionHandler(prod, ae))

@@ -58,6 +58,14 @@ func isProviderNativelySupported(provider string) bool {
 func findMissingAuthParams(providerName string, params map[string]string) string {
 	missingFields := []string{}
 
+	if provider.UsesBedrockIam(providerName, params) {
+		if len(params[provider.BedrockRegionParam]) == 0 {
+			missingFields = append(missingFields, provider.BedrockRegionParam)
+		}
+
+		return strings.Join(missingFields, " ,")
+	}
+
 	if providerName == "openai" || providerName == "anthropic" || providerName == "deepinfra" {
 		val := params["apikey"]
 		if len(val) == 0 {
@@ -146,6 +154,14 @@ func (m *ProviderSettingsManager) validateSettings(providerName string, setting 
 		return internal_errors.NewValidationError(fmt.Sprintf("provider %s is missing fields %s", providerName, missing))
 	}
 
+	if provider.UsesBedrockIam(providerName, setting) {
+		for _, name := range []string{provider.BedrockSessionTagsParam, provider.BedrockModelsParam} {
+			if _, err := provider.ParseBedrockStringMap(setting, name); err != nil {
+				return internal_errors.NewValidationError(err.Error())
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -158,7 +174,7 @@ func (m *ProviderSettingsManager) EncryptParams(updatedAt int64, provider string
 
 		params["awsSecretAccessKey"] = encryted
 
-	} else if provider == "openai" || provider == "anthropic" || provider == "deepinfra" || provider == "azure" {
+	} else if (provider == "openai" || provider == "anthropic" || provider == "deepinfra" || provider == "azure") && len(params["apikey"]) != 0 {
 		encryted, err := m.Encryptor.Encrypt(params["apikey"], map[string]string{"X-UPDATED-AT": strconv.FormatInt(updatedAt, 10)})
 		if err != nil {
 			return nil, err

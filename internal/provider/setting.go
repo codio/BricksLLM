@@ -1,6 +1,39 @@
 package provider
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
+
+const (
+	BedrockRegionParam      = "awsRegion"
+	BedrockRoleArnParam     = "awsRoleArn"
+	BedrockExternalIdParam  = "awsExternalId"
+	BedrockSessionTagsParam = "awsSessionTags"
+	BedrockModelsParam      = "bedrockModels"
+)
+
+func ProviderSupportsBedrockIam(provider string) bool {
+	return provider == "openai" || provider == "anthropic"
+}
+
+func UsesBedrockIam(provider string, params map[string]string) bool {
+	return ProviderSupportsBedrockIam(provider) && len(params[BedrockRoleArnParam]) != 0
+}
+
+func ParseBedrockStringMap(params map[string]string, name string) (map[string]string, error) {
+	raw := params[name]
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	parsed := map[string]string{}
+	if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+		return nil, fmt.Errorf("%s must be a JSON object of strings: %w", name, err)
+	}
+
+	return parsed, nil
+}
 
 type Setting struct {
 	CreatedAt     int64             `json:"createdAt"`
@@ -21,6 +54,10 @@ type CostMap struct {
 
 func (s *Setting) GetParam(key string) string {
 	return s.Setting[key]
+}
+
+func (s *Setting) UsesBedrockIam() bool {
+	return UsesBedrockIam(s.Provider, s.Setting)
 }
 
 type UpdateSetting struct {
